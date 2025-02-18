@@ -22,7 +22,21 @@ It gives you the **DATASPACE KICKSTART** you need to adopt the Tractus-X Technol
   
 - [Portal IAM/IDP](https://github.com/eclipse-tractusx/portal-iam)
 
-It also will allow you to extend the "frontend", "backend" and Tractus-X sdks to support different use cases. Allowing you to create "ready to use" KIT toolboxes with personalized visualization for every Standard Catena-X Data Model. 
+It also will allow you to extend the "frontend", "backend" and a [Tractus-X SDK](https://github.com/eclipse-tractusx/tractusx-sdk) to support different use cases. Allowing you to create "ready to use" KIT toolboxes with personalized visualization for every Standard Catena-X Data Model. 
+
+This application is a reference implementation from the Industry Core and aims to offer a implementation for integrating this Catena-X Standards: 
+
+- [CX-0001 EDC Discovery API](https://catenax-ev.github.io/docs/standards/CX-0001-EDCDiscoveryAPI)
+- [CX-0002 Digital Twins in Catena-X](https://catenax-ev.github.io/docs/standards/CX-0002-DigitalTwinsInCatenaX)
+- [CX-0003 SAMM Aspect Meta Model](https://catenax-ev.github.io/docs/standards/CX-0003-SAMMSemanticAspectMetaModel)
+- [CX-0005 Item Relationship Service](https://catenax-ev.github.io/docs/standards/CX-0005-ItemRelationshipServiceAPI) (with IRS)
+- [CX-0007 Minimal Data Provider Service](https://catenax-ev.github.io/docs/standards/CX-0007-MinimalDataProviderServicesOffering)
+- [CX-0018 Dataspace Connectivity](https://catenax-ev.github.io/docs/standards/CX-0018-DataspaceConnectivity)
+- [CX-0030 Aspect Model BoM As Specified](https://catenax-ev.github.io/docs/standards/CX-0030-DataModelBoMAsSpecified)
+- [CX-0032 Data Model: Part as Specified](https://catenax-ev.github.io/docs/standards/CX-0032-DataModelPartAsSpecified)
+- [CX-0053 Discovery Finder & BPN Discovery Service](https://catenax-ev.github.io/docs/standards/CX-0053-BPNDiscoveryServiceAPIs)
+- [CX-0126 Industry Core: Part Type](https://catenax-ev.github.io/docs/standards/CX-0126-IndustryCorePartType)
+- [CX-0127 Industry Core: Part Instance](https://catenax-ev.github.io/docs/standards/CX-0127-IndustryCorePartInstance)
 
 ## Overview
 
