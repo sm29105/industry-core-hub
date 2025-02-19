@@ -17,3 +17,7 @@ SPDX-License-Identifier: CC-BY-4.0
 -->
 
 ## Industry Core Hub Frontend
+
+## UX & UI Draft
+
+![ui-draft](./docs/media/ux-ui-design.svg)

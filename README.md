@@ -22,7 +22,21 @@ It gives you the **DATASPACE KICKSTART** you need to adopt the Tractus-X Technol
   
 - [Portal IAM/IDP](https://github.com/eclipse-tractusx/portal-iam)
 
-It also will allow you to extend the "frontend", "backend" and Tractus-X sdks to support different use cases. Allowing you to create "ready to use" KIT toolboxes with personalized visualization for every Standard Catena-X Data Model. 
+It also will allow you to extend the "frontend", "backend" and a [Tractus-X SDK](https://github.com/eclipse-tractusx/tractusx-sdk) to support different use cases. Allowing you to create "ready to use" KIT toolboxes with personalized visualization for every Standard Catena-X Data Model. 
+
+This application is a reference implementation from the Industry Core and aims to offer a implementation for integrating this Catena-X Standards: 
+
+- [CX-0001 EDC Discovery API](https://catenax-ev.github.io/docs/standards/CX-0001-EDCDiscoveryAPI)
+- [CX-0002 Digital Twins in Catena-X](https://catenax-ev.github.io/docs/standards/CX-0002-DigitalTwinsInCatenaX)
+- [CX-0003 SAMM Aspect Meta Model](https://catenax-ev.github.io/docs/standards/CX-0003-SAMMSemanticAspectMetaModel)
+- [CX-0005 Item Relationship Service](https://catenax-ev.github.io/docs/standards/CX-0005-ItemRelationshipServiceAPI) (with IRS)
+- [CX-0007 Minimal Data Provider Service](https://catenax-ev.github.io/docs/standards/CX-0007-MinimalDataProviderServicesOffering)
+- [CX-0018 Dataspace Connectivity](https://catenax-ev.github.io/docs/standards/CX-0018-DataspaceConnectivity)
+- [CX-0030 Aspect Model BoM As Specified](https://catenax-ev.github.io/docs/standards/CX-0030-DataModelBoMAsSpecified)
+- [CX-0032 Data Model: Part as Specified](https://catenax-ev.github.io/docs/standards/CX-0032-DataModelPartAsSpecified)
+- [CX-0053 Discovery Finder & BPN Discovery Service](https://catenax-ev.github.io/docs/standards/CX-0053-BPNDiscoveryServiceAPIs)
+- [CX-0126 Industry Core: Part Type](https://catenax-ev.github.io/docs/standards/CX-0126-IndustryCorePartType)
+- [CX-0127 Industry Core: Part Instance](https://catenax-ev.github.io/docs/standards/CX-0127-IndustryCorePartInstance)
 
 ## Overview
 
@@ -64,108 +78,15 @@ Kickoff              MVP                Stable          NEXT            2026 -> 
 - **Backend**: Python, FAST API
 - **Frontend**: React.js, Portal Shared Components, Material UI
 
+## Backend
 
-## Component Organization
-
-```mermaid
-flowchart TD
-    subgraph Tractus-X Backend Libraries
-    B[/tx_industry_sdk/]-- Uses -->  A[/tx_dataspace_sdk/]
-    end
-    subgraph Tractus-X Frontend Library
-    portal-shared-components
-    end
-    subgraph Industry Core Hub
-    ic-backend -- Uses --> B[/tx_industry_sdk/]
-    ic-frontend -- Uses --> portal-shared-components
-    ic-frontend -- Consumes APIs --> ic-backend
-    end
-```
-
-Designed for scalability and fast adoption
-
-## Possible Adoption Ways
-
-Here is an example of how this application can be adopted from various use cases
-
-```mermaid
-
-flowchart TD
-    subgraph Tractus-X Backend Libraries
-    B[/tx_industry_sdk/]-- Uses -->  A[/tx_dataspace_sdk/]
-    end
-    subgraph Tractus-X Frontend Library
-    portal-shared-components
-    end
-    subgraph Industry Core Hub
-    ic-backend -- Uses --> B[/tx_industry_sdk/]
-    ic-frontend -- Uses --> portal-shared-components
-    ic-frontend -- Consumes APIs --> ic-backend
-    end
-    subgraph Use Case App A
-    appa-backend -- Consumer APIs --> A[/tx_dataspace_sdk/]
-    end
-    subgraph Use Case App B
-    aapb-backend -- Consumer APIs --> B[/tx_industry_sdk/]
-    end
-    subgraph Use Case App C
-    aapc-frontend -- Consumer APIs --> ic-backend 
-    end
-    subgraph Use Case App D
-    appd-backend -- Uses Code --> A[/tx_dataspace_sdk/]
-    end
-    subgraph Use Case App F
-    appf-backend -- Uses Code --> B[/tx_industry_sdk/]
-    end
-    subgraph Use Case App G
-    appg-backend -- Uses Code --> ic-backend
-    end
-
-```
-
-## Tractus-X Microservices for Dataspace, Industry & Industry Core Use Case
-
-```mermaid
-
-flowchart TD
-    subgraph Tractus-X Backend Libraries
-    B[/tx_industry_sdk/]-- Uses -->  A[/tx_dataspace_sdk/]
-    A[/tx_dataspace_sdk/] -- HAS --> DFM{{Dataspace Foundation Microservices}}
-    B[/tx_industry_sdk/] -- HAS --> IFM{{Industry Foundation Microservices}}
-    IFM{{Industry Foundation Microservices}} -- Uses --> B[/tx_industry_sdk/]
-    DFM{{Dataspace Foundation Microservices}} -- Uses --> A[/tx_dataspace_sdk/]
-    end
-    subgraph Industry Core Hub
-    ic-backend -- Uses --> B[/tx_industry_sdk/]
-    ic-frontend -- Consumes APIs --> ic-backend
-    ICM{{Industry Core Use Case Microservices}} -- Uses --> ic-backend
-    ic-backend -- HAS --> ICM{{Industry Core Use Case Microservices}}
-    end
-    subgraph Use Case App A
-    appa-backend -- Consumer APIs --> DFM{{Dataspace Foundation Microservices}}
-    end
-    subgraph Use Case App B
-    aapb-backend -- Consumer APIs --> IFM{{Industry Foundation Microservices}}
-    end
-    subgraph Use Case App C
-    aapc-frontend -- Consumer APIs --> ICM{{Industry Core Use Case Microservices}}
-    end
-    subgraph Use Case App D
-    appd-backend -- Uses Code --> A[/tx_dataspace_sdk/]
-    end
-    subgraph Use Case App F
-    appf-backend -- Uses Code --> B[/tx_industry_sdk/]
-    end
-    subgraph Use Case App G
-    appg-backend -- Uses Code --> ic-backend
-    end
-```
+![backend architecture](./docs/media/BackendArchitecture.png)
 
 ## Frontend
 
 ![frontend mock](./docs/architecture/media/Frontend_Mock_Industry_Core.png)
 
-## Infinite Add-ons Extensions
+### Infinite Add-ons Extensions
 
 Proving the same "motor" of implementation for infinite add-ons of use cases that can build over the industry core standards. We provide the "technology" enablement, so you can orchestrate your use case in the best way, providing personalized views for your "Data Models" and also features for your use cases which were not originally included in the "open source" development, allowing you to sell specific extention views and features in the Catena-X marketplace.
 
