@@ -239,7 +239,7 @@ class BatchPart(SQLModel, table=True):
     # TODO: create extra foreign key attribute if needed
 
     batch_id: str = Field(index=True)
-    """The batch instance id of the part batch"""
+    """The batch id of the part batch"""
     # TODO: create a composite unique key with part_type and batch_id
 
 class JISPart(SQLModel, table=True):
