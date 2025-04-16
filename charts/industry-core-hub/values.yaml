@@ -288,6 +288,8 @@ postgresql:
     ichubUser: "ichub"
     # -- Password for the non-root username 'ichub'. Secret-key 'ichub-password'.
     ichubPassword: ""
+    # -- Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated with the server. There are [six modes](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE)
+    sslMode: "prefer"
   audit:
     pgAuditLog: "write, ddl"
     logLinePrefix: "%m %u %d "
@@ -338,6 +340,8 @@ externalDatabase:
   existingSecret: ""
   # -- Key in the existing secret that contains database password for ichub user
   existingIchubSecretKey: "ichub-password"
+  # -- Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated with the server. There are [six modes](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE)
+  sslMode: "prefer"
 
 # [node selector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) to constrain pods to nodes
 nodeSelector: {}

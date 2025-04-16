@@ -62,19 +62,13 @@ spec:
               containerPort: {{ .Values.backend.service.port }}
               protocol: TCP
           env:
-            - name: DATABASE__HOST
-              value: {{ include "industry-core-hub.postgresql.host" . }}
-            - name: DATABASE_PORT
-              value: {{ include "industry-core-hub.postgresql.port" . | quote }}
-            - name: DATABASE_NAME
-              value: {{ include "industry-core-hub.postgresql.databaseName" . }}
-            - name: DATABASE_USER
-              value: {{ include "industry-core-hub.postgresql.ichubUser" . }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "industry-core-hub.postgresql.secretName" . }}
                   key: {{ include "industry-core-hub.postgresql.ichub.secretKey" . }}
+            - name: DATABASE_CONNECTION_STRING
+              value: {{ include "industry-core-hub.postgresql.dsn" . | quote }}
           {{- if .Values.backend.healthChecks.startup.enabled }}
           startupProbe:
             httpGet:

@@ -193,6 +193,17 @@ Get the database name
 {{- end -}}
 
 {{/*
+Get the sslMode
+*/}}
+{{- define "industry-core-hub.postgresql.sslMode" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.sslMode -}}
+{{- else -}}
+{{- .Values.externalDatabase.sslMode -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Get the database secret key
 */}}
 {{- define "industry-core-hub.postgresql.ichub.secretKey" -}}
@@ -227,4 +238,16 @@ Get the postgres configmap name
 */}}
 {{- define "industry-core-hub.postgresql.configmap" -}}
 {{- printf "%s-cm-postgres" .Release.Name -}}
+{{- end -}}
+
+{{/*
+Return the postgresql DSN URL
+*/}}
+{{- define "industry-core-hub.postgresql.dsn" -}}
+{{- $host := include "industry-core-hub.postgresql.host" . -}}
+{{- $port := include "industry-core-hub.postgresql.port" . -}}
+{{- $name := include "industry-core-hub.postgresql.databaseName" . -}}
+{{- $user := include "industry-core-hub.postgresql.ichubUser" . -}}
+{{- $sslMode := include "industry-core-hub.postgresql.sslMode" . -}}
+{{- printf "postgresql://%s:$(DATABASE_PASSWORD)@%s:%s/%s?sslmode=%s" $user $host $port $name $sslMode -}}
 {{- end -}}

@@ -65,7 +65,7 @@ helm install industry-core-hub tractusx/industry-core-hub
 | backend.securityContext.runAsNonRoot | bool | `true` | Requires the container to run without root privileges |
 | backend.securityContext.runAsUser | int | `10000` | The container's process will run with the specified uid |
 | backend.service.type | string | `"ClusterIP"` | [Service type](https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types) to expose the running application on a set of Pods as a network service |
-| externalDatabase | object | `{"database":"postgres","existingIchubSecretKey":"ichub-password","existingSecret":"","host":"","ichubPassword":"","ichubUser":"ichub","port":5432}` | External database configuration (used when postgresql.enabled is false) |
+| externalDatabase | object | `{"database":"postgres","existingIchubSecretKey":"ichub-password","existingSecret":"","host":"","ichubPassword":"","ichubUser":"ichub","port":5432,"sslMode":"prefer"}` | External database configuration (used when postgresql.enabled is false) |
 | externalDatabase.database | string | `"postgres"` | External PostgreSQL database name |
 | externalDatabase.existingIchubSecretKey | string | `"ichub-password"` | Key in the existing secret that contains database password for ichub user |
 | externalDatabase.existingSecret | string | `""` | Existing secret containing database password |
@@ -73,6 +73,7 @@ helm install industry-core-hub tractusx/industry-core-hub
 | externalDatabase.ichubPassword | string | `""` | External PostgreSQL password for ichub user |
 | externalDatabase.ichubUser | string | `"ichub"` | External PostgreSQL username for ichub user |
 | externalDatabase.port | int | `5432` | External PostgreSQL port |
+| externalDatabase.sslMode | string | `"prefer"` | Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated with the server. There are [six modes](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE) |
 | frontend.additionalVolumeMounts | list | `[]` | specifies additional volume mounts for the backend deployment |
 | frontend.additionalVolumes | list | `[]` | additional volume claims for the containers |
 | frontend.enabled | bool | `true` |  |
@@ -117,13 +118,14 @@ helm install industry-core-hub tractusx/industry-core-hub
 | nameOverride | string | `""` |  |
 | nodeSelector | object | `{}` |  |
 | pgadmin4 | object | `{"enabled":false,"env":{"email":"pgadmin4@txtest.org","password":"tractusxpgadmin4"},"ingress":{"enabled":false},"persistentVolume":{"enabled":false}}` | pgAdmin4 configuration |
-| postgresql | object | `{"audit":{"logLinePrefix":"%m %u %d ","pgAuditLog":"write, ddl"},"auth":{"database":"ichub-postgres","existingSecret":"ichub-postgres-secret","ichubPassword":"","ichubUser":"ichub","password":"","port":5432},"enabled":true,"fullnameOverride":"","nameOverride":"","primary":{"extendedConfiguration":"","extraEnvVars":[{"name":"ICHUB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"ichub-password","name":"{{ .Values.auth.existingSecret }}"}}}],"initdb":{"scriptsConfigMap":"{{ .Release.Name }}-cm-postgres"},"persistence":{"enabled":true,"size":"10Gi","storageClass":""}}}` | PostgreSQL chart configuration |
+| postgresql | object | `{"audit":{"logLinePrefix":"%m %u %d ","pgAuditLog":"write, ddl"},"auth":{"database":"ichub-postgres","existingSecret":"ichub-postgres-secret","ichubPassword":"","ichubUser":"ichub","password":"","port":5432,"sslMode":"prefer"},"enabled":true,"fullnameOverride":"","nameOverride":"","primary":{"extendedConfiguration":"","extraEnvVars":[{"name":"ICHUB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"ichub-password","name":"{{ .Values.auth.existingSecret }}"}}}],"initdb":{"scriptsConfigMap":"{{ .Release.Name }}-cm-postgres"},"persistence":{"enabled":true,"size":"10Gi","storageClass":""}}}` | PostgreSQL chart configuration |
 | postgresql.auth.database | string | `"ichub-postgres"` | Database name |
 | postgresql.auth.existingSecret | string | `"ichub-postgres-secret"` | Secret containing the passwords for root usernames postgres and non-root usernames repl_user and ichub. |
 | postgresql.auth.ichubPassword | string | `""` | Password for the non-root username 'ichub'. Secret-key 'ichub-password'. |
 | postgresql.auth.ichubUser | string | `"ichub"` | Non-root username for ichub. |
 | postgresql.auth.password | string | `""` | Password for the root username 'postgres' (will be stored in a secret if existingSecret is not provided) |
 | postgresql.auth.port | int | `5432` | Database port number |
+| postgresql.auth.sslMode | string | `"prefer"` | Determines whether or with what priority a secure SSL TCP/IP connection will be negotiated with the server. There are [six modes](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNECT-SSLMODE) |
 | postgresql.enabled | bool | `true` | Switch to enable or disable the PostgreSQL helm chart |
 | postgresql.primary.extendedConfiguration | string | `""` | Extended PostgreSQL Primary configuration (increase of max_connections recommended - default is 100) |
 | postgresql.primary.persistence.enabled | bool | `true` | Enable persistent storage |
