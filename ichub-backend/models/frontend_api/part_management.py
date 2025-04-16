@@ -42,8 +42,7 @@ class CatalogPartCreate(CatalogPartBase):
 class CatalogPartDelete(CatalogPartBase):
     pass
 
-class PartnerCatalogPartCreate(BaseModel):
-    manufacturer_part_id: str = Field(alias="manufacturerPartId", description="The manufacturer part ID of the part to create a partner entry.")
+class PartnerCatalogPartCreate(CatalogPartBase):
     customer_part_id: str = Field(alias="customerPartId", description="The customer part ID for partner specific mapping of the catalog part.")
     business_partner_name: str = Field(alias="businessPartnerName", description="The unique name of the business partner to map the catalog part to.")
 
