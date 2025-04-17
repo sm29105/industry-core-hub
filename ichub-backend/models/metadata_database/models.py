@@ -217,7 +217,7 @@ class TwinRegistration(SQLModel, table=True):
     dtr_registered: bool = Field(default=False, description="Whether the twin is registered in the DTR.")
 
     # Relationships
-    twin: Twin = Relationship(back_populates="twin_registration")
-    enablement_service_stack: EnablementServiceStack = Relationship(back_populates="twin_registration")
+    twin: Twin = Relationship(back_populates="twin_registrations")
+    enablement_service_stack: EnablementServiceStack = Relationship(back_populates="twin_registrations")
 
     __tablename__ = "twin_registration"
