@@ -22,21 +22,60 @@
 # SPDX-License-Identifier: Apache-2.0
 #################################################################################
 
-from typing import List
+from typing import List, Optional
 from models.frontend_api.part_management import BatchCreate, BatchRead, CatalogPartCreate, CatalogPartDelete, CatalogPartRead, JISPartCreate, JISPartDelete, JISPartRead, PartnerCatalogPartCreate, PartnerCatalogPartDelete, SerializedPartCreate, SerializedPartDelete, SerializedPartRead
+from models.metadata_database.repositories import CatalogPartRepository, BusinessPartnerRepository, LegalEntityRepository, PartnerCatalogPartRepository
+from models.metadata_database.models import CatalogPart, PartnerCatalogPart, Batch, SerializedPart, JISPart
 
 class PartManagementService():
     """
     Service class for managing parts and their relationships in the system.
     """
 
+    def __init__(self):
+        self.business_partner_repository = BusinessPartnerRepository()
+        self.catalog_part_repository = CatalogPartRepository()
+        self.legal_entity_repository = LegalEntityRepository()
+        self.partner_catalog_part_repository = PartnerCatalogPartRepository()
+
     def create_catalog_part(self, catalog_part_create: CatalogPartCreate) -> CatalogPartRead:
         """
         Create a new catalog part in the system.
         """
 
-        # Logic to create a catalog part
-        pass
+        legal_entity = self.legal_entity_repository.get_by_bpnl(catalog_part_create.manufacturer_id)
+        if not legal_entity:
+            raise ValueError(f"Legal Entity with manufacturer BPNL '{catalog_part_create.manufacturer_id}' does not exist. Please create it first.")
+
+        catalog_part = self.catalog_part_repository.get_by_manufacturer_id_manufactuer_part_id(
+            catalog_part_create.manufacturer_id, catalog_part_create.manufacturer_part_id
+        )
+        if catalog_part:
+            raise ValueError("Catalog part already exists.")
+
+        result = CatalogPartRead(
+            manufacturerId=catalog_part_create.manufacturer_id,
+            manufacturerPartId=catalog_part_create.manufacturer_part_id)
+
+        if catalog_part_create.customer_part_ids:
+            for partner_catalog_part in catalog_part_create.customer_part_ids:
+                if not partner_catalog_part.customer_part_id:
+                    raise ValueError("Customer part ID is required for a customer part mapping.")
+                
+                if not partner_catalog_part.business_partner_name:
+                    raise ValueError("Business partner name is required for a customer part mapping.")
+                
+                business_partner = self.business_partner_repository.get_by_name(partner_catalog_part.business_partner_name)
+                if not business_partner:
+                    raise ValueError(f"Business partner '{partner_catalog_part.business_partner_name}' does not exist. Please create it first.")
+
+                self.partner_catalog_part_repository.create(catalog_part, business_partner, partner_catalog_part.customer_part_id)
+                # TODO: error handling (issue: if one customer part ID fails, all should fail???)
+
+                result.customer_part_ids[partner_catalog_part.customer_part_id] = business_partner
+
+        return result
+                
 
     def delete_catalog_part(self, catlog_part: CatalogPartDelete) -> None:
         """
@@ -45,13 +84,21 @@ class PartManagementService():
         # Logic to delete a catalog part
         pass
 
-    def get_catalog_part(self, manufacturer_id: str, manufacturer_part_id: str) -> CatalogPartRead:
-        """
-        Retrieve a catalog part from the system.
-        """
+    def get_catalog_part(self, manufacturer_id: str, manufacturer_part_id: str) -> Optional[CatalogPartRead]:
+        catalog_part: Optional[CatalogPart] = self.catalog_part_repository.get_by_manufacturer_id_manufactuer_part_id(
+            manufacturer_id, manufacturer_part_id
+        )
         
-        # Logic to retrieve a catalog part
-        pass
+        if not catalog_part:
+            return None
+        else:
+            # TODO: deal with customer part IDs
+            return CatalogPartRead(
+                legal_entity_bpnl=catalog_part.legal_entity.bpnl,
+                manufacturer_part_id=catalog_part.manufacturer_part_id,
+                customer_part_ids={}
+            )
+        
 
     def get_catalog_parts(self, manufacturer_id: str = None, manufacturer_part_id: str = None) -> List[CatalogPartRead]:
         """

@@ -81,6 +81,7 @@ class CatalogPart(SQLModel, table=True):
     legal_entity: LegalEntity = Relationship(back_populates="catalog_parts")
     twin: Optional[Twin] = Relationship(back_populates="catalog_parts")
     partner_catalog_parts: List["PartnerCatalogPart"] = Relationship(back_populates="catalog_part")
+    batches: List["Batch"] = Relationship(back_populates="catalog_part")
 
     __tablename__ = "catalog_part"
 
@@ -133,6 +134,31 @@ class JISPart(SQLModel, table=True):
 
     __tablename__ = "jis_part"
 
+class Batch(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    batch_id: str = Field(index=True, unique=True, description="The batch ID.")
+    catalog_part_id: int = Field(foreign_key="catalog_part.id", description="The ID of the associated catalog part.")
+
+    # Relationships
+    catalog_part: CatalogPart = Relationship(back_populates="batches")
+    batch_business_partners: List["BatchBusinessPartner"] = Relationship(back_populates="batch")
+
+    # Composite Unique Constraint
+    __table_args__ = (
+        {"unique": ("catalog_part_id", "batch_id")},
+    )
+
+    __tablename__ = "batch"
+
+class BatchBusinessPartner(SQLModel, table=True):
+    batch_id: str = Field(foreign_key="batch.id", description="The batch ID.", primary_key=True)
+    business_partner_id: int = Field(foreign_key="business_partner.id", description="The ID of the associated business partner.", primary_key=True)
+
+    # Relationships
+    business_partner: BusinessPartner = Relationship()
+    batch: Batch = Relationship(back_populates="batch_business_partners")
+
+    __tablename__ = "batch_business_partner"
 
 class DataExchangeAgreement(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

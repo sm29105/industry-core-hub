@@ -23,7 +23,7 @@
 #################################################################################
 
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from pydantic import BaseModel, Field
 
@@ -33,18 +33,25 @@ class CatalogPartBase(BaseModel):
     manufacturer_id: str = Field(alias="manufacturerId", description="The BPNL (manufactuer ID) of the part to register.")
     manufacturer_part_id: str = Field(alias="manufacturerPartId", description="The manufacturer part ID of the part.")
 
+class PartnerCatalogPartBase(BaseModel):
+    customer_part_id: str = Field(alias="customerPartId", description="The customer part ID for partner specific mapping of the catalog part.")
+    business_partner_name: str = Field(alias="businessPartnerName", description="The unique name of the business partner to map the catalog part to.")
+
 class CatalogPartRead(CatalogPartBase):
     customer_part_ids: Optional[Dict[str, BusinessPartner]] = Field(alias="customerPartIds", description="The list of customer part IDs mapped to the respective Business Partners.", default={})
 
 class CatalogPartCreate(CatalogPartBase):
-    customer_part_ids: Optional[Dict[str, str]] = Field(alias="customerPartIds", description="An optional map of customer part IDs to the respective business partner names.", default={})
+    customer_part_ids: List[PartnerCatalogPartBase] = Field(alias="customerPartIds", description="An optional list of customer part IDs to business partner name mappings.", default={})
 
 class CatalogPartDelete(CatalogPartBase):
     pass
 
-class PartnerCatalogPartCreate(CatalogPartBase):
-    customer_part_id: str = Field(alias="customerPartId", description="The customer part ID for partner specific mapping of the catalog part.")
-    business_partner_name: str = Field(alias="businessPartnerName", description="The unique name of the business partner to map the catalog part to.")
+class CatalogPartQuery(BaseModel):
+    manufacturer_id: Optional[str] = Field(alias="manufacturerId", description="The BPNL (manufactuer ID) of the part to register.", default=None)
+    manufacturer_part_id: Optional[str] = Field(alias="manufacturerPartId", description="The manufacturer part ID of the part.", default=None)
+
+class PartnerCatalogPartCreate(CatalogPartBase, PartnerCatalogPartBase):
+    pass
 
 class PartnerCatalogPartDelete(PartnerCatalogPartCreate):
     pass
@@ -61,6 +68,9 @@ class BatchCreate(CatalogPartCreate, BatchBase):
 class BatchDelete(CatalogPartDelete, BatchBase):
     pass
 
+class BatchQuery(CatalogPartQuery):
+    batch_id: Optional[str] = Field(alias="batchId", description="The batch ID of the part.", default=None)
+
 class SerializedPartBase(CatalogPartBase):
     part_instance_id: str = Field(alias="partInstanceId", description="The part instance ID of the serialized part.")
     customer_part_id: str = Field(alias="customerPartId", description="The customer part ID of the part.")
@@ -75,6 +85,10 @@ class SerializedPartCreate(SerializedPartBase):
 
 class SerializedPartDelete(SerializedPartBase):
     business_partner_name: str = Field(alias="businessPartnerName", description="The unique name of the business partner to map the catalog part to.")
+
+class SerializedPartQuery(CatalogPartQuery):
+    part_instance_id: Optional[str] = Field(alias="partInstanceId", description="The part instance ID of the serialized part.", default=None)
+    van: Optional[str] = Field(description="The optional VAN (Vehicle Assembly Number) of the serialized part.", default=None)
 
 class JISPartBase(CatalogPartBase):
     jis_number: str = Field(alias="jisNumber", description="The JIS number of the JIS part.")
@@ -92,3 +106,9 @@ class JISPartCreate(JISPartBase):
 
 class JISPartDelete(JISPartBase):
     business_partner_name: str = Field(alias="businessPartnerName", description="The unique name of the business partner to map the catalog part to.")
+
+class JISPartQuery(CatalogPartQuery):
+    jis_number: Optional[str] = Field(alias="jisNumber", description="The JIS number of the JIS part.", default=None)
+    parent_order_number: Optional[str] = Field(alias="parentOrderNumber", description="The parent order number of the JIS part.", default=None)
+    jis_call_date_min: Optional[datetime] = Field(alias="jisCallDate", description="The minimal JIS call date of the JIS part.", default=None)
+    jis_call_date_max: Optional[datetime] = Field(alias="jisCallDate", description="The maximal JIS call date of the JIS part.", default=None)
