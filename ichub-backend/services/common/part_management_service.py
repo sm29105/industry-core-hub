@@ -22,32 +22,31 @@
 # SPDX-License-Identifier: Apache-2.0
 #################################################################################
 
-from typing import List, Optional
-from models.frontend_api.part_management import BatchCreate, BatchRead, CatalogPartCreate, CatalogPartDelete, CatalogPartRead, JISPartCreate, JISPartDelete, JISPartRead, PartnerCatalogPartCreate, PartnerCatalogPartDelete, SerializedPartCreate, SerializedPartDelete, SerializedPartRead
+from typing import Dict, List, Optional
+from models.frontend_api.part_management import BatchCreate, BatchRead, CatalogPartCreate, CatalogPartDelete, CatalogPartRead, JISPartCreate, JISPartDelete, JISPartRead, PartnerCatalogPartBase, PartnerCatalogPartCreate, PartnerCatalogPartDelete, SerializedPartCreate, SerializedPartDelete, SerializedPartRead
+from models.frontend_api.partner_management import BusinessPartner
 from managers.metadata_database.repositories import CatalogPartRepository, BusinessPartnerRepository, LegalEntityRepository, PartnerCatalogPartRepository
-from models.metadata_database.models import CatalogPart, PartnerCatalogPart, Batch, SerializedPart, JISPart
+from managers.metadata_database.manager import RepositoryManager, RepositoryManagerFactory
+from models.metadata_database.models import CatalogPart, Batch, SerializedPart, JISPart
 
 class PartManagementService():
     """
     Service class for managing parts and their relationships in the system.
     """
 
-    def __init__(self):
-        self.business_partner_repository = BusinessPartnerRepository()
-        self.catalog_part_repository = CatalogPartRepository()
-        self.legal_entity_repository = LegalEntityRepository()
-        self.partner_catalog_part_repository = PartnerCatalogPartRepository()
+    def __init__(self, ):
+        self.repositories = RepositoryManagerFactory.create()
 
     def create_catalog_part(self, catalog_part_create: CatalogPartCreate) -> CatalogPartRead:
         """
         Create a new catalog part in the system.
         """
 
-        legal_entity = self.legal_entity_repository.get_by_bpnl(catalog_part_create.manufacturer_id)
+        legal_entity = self.repositories.legal_entity_repository.get_by_bpnl(catalog_part_create.manufacturer_id)
         if not legal_entity:
             raise ValueError(f"Legal Entity with manufacturer BPNL '{catalog_part_create.manufacturer_id}' does not exist. Please create it first.")
 
-        catalog_part = self.catalog_part_repository.get_by_manufacturer_id_manufactuer_part_id(
+        catalog_part = self.repositories.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
             catalog_part_create.manufacturer_id, catalog_part_create.manufacturer_part_id
         )
         if catalog_part:
@@ -65,17 +64,34 @@ class PartManagementService():
                 if not partner_catalog_part.business_partner_name:
                     raise ValueError("Business partner name is required for a customer part mapping.")
                 
-                business_partner = self.business_partner_repository.get_by_name(partner_catalog_part.business_partner_name)
+                business_partner = self.repositories.business_partner_repository.get_by_name(partner_catalog_part.business_partner_name)
                 if not business_partner:
                     raise ValueError(f"Business partner '{partner_catalog_part.business_partner_name}' does not exist. Please create it first.")
 
-                self.partner_catalog_part_repository.create(catalog_part, business_partner, partner_catalog_part.customer_part_id)
+                self.repositories.partner_catalog_part_repository.create(catalog_part, business_partner, partner_catalog_part.customer_part_id)
                 # TODO: error handling (issue: if one customer part ID fails, all should fail???)
 
                 result.customer_part_ids[partner_catalog_part.customer_part_id] = business_partner
 
         return result
-                
+
+    def create_catalog_part_by_ids(self, manufacturer_id: str, manufacturer_part_id: str, customer_parts: Optional[List[PartnerCatalogPartBase]]) -> CatalogPartRead:
+        partner_catalog_parts = []
+        for partner_catalog_part in customer_parts:
+            partner_catalog_part = PartnerCatalogPartBase(
+                customer_part_id=partner_catalog_part.customer_part_id,
+                business_partner_name=partner_catalog_part.business_partner_name
+            )
+            partner_catalog_parts.append(partner_catalog_part)
+
+        catalog_part_create = CatalogPartCreate(
+            manufacturer_id=manufacturer_id,
+            manufacturer_part_id=manufacturer_part_id,
+            customer_part_ids=partner_catalog_parts
+        )
+
+        self.create_catalog_part(catalog_part_create)
+
 
     def delete_catalog_part(self, catlog_part: CatalogPartDelete) -> None:
         """
@@ -85,18 +101,26 @@ class PartManagementService():
         pass
 
     def get_catalog_part(self, manufacturer_id: str, manufacturer_part_id: str) -> Optional[CatalogPartRead]:
-        catalog_part: Optional[CatalogPart] = self.catalog_part_repository.get_by_manufacturer_id_manufactuer_part_id(
+        catalog_part: Optional[CatalogPart] = self.repositories.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
             manufacturer_id, manufacturer_part_id
         )
         
         if not catalog_part:
             return None
         else:
-            # TODO: deal with customer part IDs
+            customer_parts: Dict[str, BusinessPartner] = {}
+
+            if catalog_part.partner_catalog_parts:
+                for partner_catalog_part in catalog_part.partner_catalog_parts:
+                    customer_parts[partner_catalog_part.customer_part_id] = BusinessPartner(
+                        name=partner_catalog_part.business_partner.name,
+                        bpnl=partner_catalog_part.business_partner.bpnl
+                    )
+
             return CatalogPartRead(
                 legal_entity_bpnl=catalog_part.legal_entity.bpnl,
                 manufacturer_part_id=catalog_part.manufacturer_part_id,
-                customer_part_ids={}
+                customer_part_ids=customer_parts
             )
         
 

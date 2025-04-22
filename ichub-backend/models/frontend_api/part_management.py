@@ -41,7 +41,7 @@ class CatalogPartRead(CatalogPartBase):
     customer_part_ids: Optional[Dict[str, BusinessPartner]] = Field(alias="customerPartIds", description="The list of customer part IDs mapped to the respective Business Partners.", default={})
 
 class CatalogPartCreate(CatalogPartBase):
-    customer_part_ids: List[PartnerCatalogPartBase] = Field(alias="customerPartIds", description="An optional list of customer part IDs to business partner name mappings.", default={})
+    customer_part_ids: Optional[List[PartnerCatalogPartBase]] = Field(alias="customerPartIds", description="An optional list of customer part IDs to business partner name mappings.", default=[])
 
 class CatalogPartDelete(CatalogPartBase):
     pass
