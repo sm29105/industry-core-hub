@@ -53,7 +53,7 @@ class BusinessPartner(SQLModel, table=True):
 
 class Twin(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    catenax_id: UUID = Field(default_factory=UUID, unique=True, description="The Catena-X ID of the twin.")
+    global_id: UUID = Field(default_factory=UUID, unique=True, description="The global ID (aka. Catena-X ID) of the twin.")
     aas_id: UUID = Field(default_factory=UUID, unique=True, description="The AAS ID of the twin.")
     created_date: datetime = Field(default_factory=datetime.utcnow, description="The creation date of the twin.")
     modified_date: datetime = Field(default_factory=datetime.utcnow, description="The last modification date of the twin.")
@@ -76,6 +76,8 @@ class CatalogPart(SQLModel, table=True):
     manufacturer_part_id: str = Field(index=True, unique=True, description="The manufacturer part ID.")
     legal_entity_id: int = Field(foreign_key="legal_entity.id", description="The ID of the associated legal entity.")
     twin_id: Optional[int] = Field(foreign_key="twin.id", description="The ID of the associated twin.")
+    category: Optional[str] = Field(default=None, description="The category of the catalog part.")
+    bpns: Optional[str] = Field(default=None, description="The optional site information (BPNS) of the catalog part.")
 
     # Relationships
     legal_entity: LegalEntity = Relationship(back_populates="catalog_parts")
