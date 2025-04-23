@@ -40,42 +40,61 @@ class PartManagementService():
     def create_catalog_part(self, catalog_part_create: CatalogPartCreate) -> CatalogPartRead:
         """
         Create a new catalog part in the system.
+        Optionally also create attached partner catalog parts - i.e. partner specific mappings of the catalog part.
         """
+        with self.repositories as repos:
+            
+            # First check if the legal entity exists for the given manufacturer ID
+            db_legal_entity = repos.legal_entity_repository.get_by_bpnl(catalog_part_create.manufacturer_id)
+            if not db_legal_entity:
+                raise ValueError(f"Legal Entity with manufacturer BPNL '{catalog_part_create.manufacturer_id}' does not exist. Please create it first.")
 
-        legal_entity = self.repositories.legal_entity_repository.get_by_bpnl(catalog_part_create.manufacturer_id)
-        if not legal_entity:
-            raise ValueError(f"Legal Entity with manufacturer BPNL '{catalog_part_create.manufacturer_id}' does not exist. Please create it first.")
+            # Check if the catalog part already exists
+            db_catalog_part = repos.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
+                catalog_part_create.manufacturer_id, catalog_part_create.manufacturer_part_id
+            )
+            if db_catalog_part:
+                raise ValueError("Catalog part already exists.")
+            else:
+                # Create the catalog part in the metadata database
+                db_catalog_part = CatalogPart(
+                    manufacturer_part_id=catalog_part_create.manufacturer_part_id,
+                    legal_entity=db_legal_entity
+                )
+                repos.catalog_part_repository.create(db_catalog_part)
 
-        catalog_part = self.repositories.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
-            catalog_part_create.manufacturer_id, catalog_part_create.manufacturer_part_id
-        )
-        if catalog_part:
-            raise ValueError("Catalog part already exists.")
+            # Prepare the result object
+            result = CatalogPartRead(
+                manufacturerId=catalog_part_create.manufacturer_id,
+                manufacturerPartId=catalog_part_create.manufacturer_part_id)
 
-        result = CatalogPartRead(
-            manufacturerId=catalog_part_create.manufacturer_id,
-            manufacturerPartId=catalog_part_create.manufacturer_part_id)
+            # Check if we already should create some customer part IDs for the given catalog part
+            if catalog_part_create.customer_part_ids:
+                for partner_catalog_part_create in catalog_part_create.customer_part_ids:
+                    
+                    # We need both the customer part ID and the name of the business partner
+                    if not partner_catalog_part_create.customer_part_id:
+                        raise ValueError("Customer part ID is required for a customer part mapping.")
+                    
+                    if not partner_catalog_part_create.business_partner_name:
+                        raise ValueError("Business partner name is required for a customer part mapping.")
+                    
+                    # Resolve the business partner by name from the metadata database
+                    db_business_partner = repos.business_partner_repository.get_by_name(partner_catalog_part_create.business_partner_name)
+                    if not db_business_partner:
+                        raise ValueError(f"Business partner '{partner_catalog_part_create.business_partner_name}' does not exist. Please create it first.")
 
-        if catalog_part_create.customer_part_ids:
-            for partner_catalog_part in catalog_part_create.customer_part_ids:
-                if not partner_catalog_part.customer_part_id:
-                    raise ValueError("Customer part ID is required for a customer part mapping.")
-                
-                if not partner_catalog_part.business_partner_name:
-                    raise ValueError("Business partner name is required for a customer part mapping.")
-                
-                business_partner = self.repositories.business_partner_repository.get_by_name(partner_catalog_part.business_partner_name)
-                if not business_partner:
-                    raise ValueError(f"Business partner '{partner_catalog_part.business_partner_name}' does not exist. Please create it first.")
+                    # Create the partner catalog part entry in the metadata database
+                    repos.partner_catalog_part_repository.create(db_catalog_part, db_business_partner, partner_catalog_part_create.customer_part_id)
+                    # TODO: error handling (issue: if one customer part ID fails, all should fail???)
 
-                self.repositories.partner_catalog_part_repository.create(catalog_part, business_partner, partner_catalog_part.customer_part_id)
-                # TODO: error handling (issue: if one customer part ID fails, all should fail???)
+                    result.customer_part_ids[partner_catalog_part_create.customer_part_id] = BusinessPartner(name = db_business_partner.name, bpnl = db_business_partner.bpnl)  
 
-                result.customer_part_ids[partner_catalog_part.customer_part_id] = business_partner
-
-        return result
+            return result
 
     def create_catalog_part_by_ids(self, manufacturer_id: str, manufacturer_part_id: str, customer_parts: Optional[List[PartnerCatalogPartBase]]) -> CatalogPartRead:
+        """Convenience method to create a catalog part by its IDs."""
+
         partner_catalog_parts = []
         for partner_catalog_part in customer_parts:
             partner_catalog_part = PartnerCatalogPartBase(
@@ -101,28 +120,29 @@ class PartManagementService():
         pass
 
     def get_catalog_part(self, manufacturer_id: str, manufacturer_part_id: str) -> Optional[CatalogPartRead]:
-        catalog_part: Optional[CatalogPart] = self.repositories.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
-            manufacturer_id, manufacturer_part_id
-        )
-        
-        if not catalog_part:
-            return None
-        else:
-            customer_parts: Dict[str, BusinessPartner] = {}
-
-            if catalog_part.partner_catalog_parts:
-                for partner_catalog_part in catalog_part.partner_catalog_parts:
-                    customer_parts[partner_catalog_part.customer_part_id] = BusinessPartner(
-                        name=partner_catalog_part.business_partner.name,
-                        bpnl=partner_catalog_part.business_partner.bpnl
-                    )
-
-            return CatalogPartRead(
-                legal_entity_bpnl=catalog_part.legal_entity.bpnl,
-                manufacturer_part_id=catalog_part.manufacturer_part_id,
-                customer_part_ids=customer_parts
+        with self.repositories as repos:
+            db_catalog_part: Optional[CatalogPart] = repos.catalog_part_repository.get_by_manufacturer_id_manufacturer_part_id(
+                manufacturer_id, manufacturer_part_id
             )
-        
+            
+            if not db_catalog_part:
+                return None
+            else:
+                customer_parts: Dict[str, BusinessPartner] = {}
+
+                if db_catalog_part.partner_catalog_parts:
+                    for db_partner_catalog_part in db_catalog_part.partner_catalog_parts:
+                        customer_parts[db_partner_catalog_part.customer_part_id] = BusinessPartner(
+                            name=db_partner_catalog_part.business_partner.name,
+                            bpnl=db_partner_catalog_part.business_partner.bpnl
+                        )
+
+                return CatalogPartRead(
+                    legal_entity_bpnl=db_catalog_part.legal_entity.bpnl,
+                    manufacturer_part_id=db_catalog_part.manufacturer_part_id,
+                    customer_part_ids=customer_parts
+                )
+            
 
     def get_catalog_parts(self, manufacturer_id: str = None, manufacturer_part_id: str = None) -> List[CatalogPartRead]:
         """

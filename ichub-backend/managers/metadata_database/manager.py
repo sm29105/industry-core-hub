@@ -107,5 +107,5 @@ class RepositoryManagerFactory():
         # Create a new session
         session = Session(engine)
 
-        """Create a new instance of RepositoryManager."""
+        # Create a new instance of RepositoryManager.
         return RepositoryManager(session)
