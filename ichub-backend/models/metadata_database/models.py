@@ -22,11 +22,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #################################################################################
 
-from typing import Optional, List
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from datetime import datetime
 from sqlmodel import Field, SQLModel, Relationship
-
+from sqlalchemy import Column, JSON
 
 class LegalEntity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -189,7 +189,10 @@ class DataExchangeContract(SQLModel, table=True):
 class EnablementServiceStack(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True, description="The name of the enablement service stack.")
-    settings: Optional[dict] = Field(default=None, description="The settings of the enablement service stack.")
+    connection_settings: Optional[Dict[str, Any]] = Field(
+        sa_column=Column(JSON),  # Specify JSON column type
+        description="Connection settings stored as JSON"
+    )
     legal_entity_id: int = Field(foreign_key="legal_entity.id", description="The ID of the associated legal entity.")
 
     # Relationships
