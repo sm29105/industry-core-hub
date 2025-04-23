@@ -23,8 +23,8 @@
 #################################################################################
 
 from typing import Dict, List, Optional
-from models.frontend_api.part_management import BatchCreate, BatchRead, CatalogPartCreate, CatalogPartDelete, CatalogPartRead, JISPartCreate, JISPartDelete, JISPartRead, PartnerCatalogPartBase, PartnerCatalogPartCreate, PartnerCatalogPartDelete, SerializedPartCreate, SerializedPartDelete, SerializedPartRead
-from models.frontend_api.partner_management import BusinessPartner
+from models.services.part_management import BatchCreate, BatchRead, CatalogPartCreate, CatalogPartDelete, CatalogPartRead, JISPartCreate, JISPartDelete, JISPartRead, PartnerCatalogPartBase, PartnerCatalogPartCreate, PartnerCatalogPartDelete, SerializedPartCreate, SerializedPartDelete, SerializedPartRead
+from models.services.partner_management import BusinessPartner
 from managers.metadata_database.repositories import CatalogPartRepository, BusinessPartnerRepository, LegalEntityRepository, PartnerCatalogPartRepository
 from managers.metadata_database.manager import RepositoryManager, RepositoryManagerFactory
 from models.metadata_database.models import CatalogPart, Batch, SerializedPart, JISPart

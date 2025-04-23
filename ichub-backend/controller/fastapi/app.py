@@ -26,8 +26,8 @@ from typing import List, Optional
 
 from fastapi import FastAPI
 
-from services.common.part_management_service import PartManagementService
-from models.frontend_api.part_management import CatalogPartRead, CatalogPartCreate, PartnerCatalogPartBase
+from services.part_management_service import PartManagementService
+from models.services.part_management import CatalogPartRead, CatalogPartCreate, PartnerCatalogPartBase
 
 app = FastAPI(root_path="/frontend")
 

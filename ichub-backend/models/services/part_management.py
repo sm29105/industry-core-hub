@@ -27,7 +27,7 @@ from typing import Dict, Optional, List
 
 from pydantic import BaseModel, Field
 
-from models.frontend_api.partner_management import BusinessPartner
+from models.services.partner_management import BusinessPartner
 
 class CatalogPartBase(BaseModel):
     manufacturer_id: str = Field(alias="manufacturerId", description="The BPNL (manufactuer ID) of the part to register.")

@@ -24,7 +24,7 @@
 
 from typing import List, Optional
 
-from models.frontend_api.partner_management import BusinessPartner
+from models.services.partner_management import BusinessPartner
 from managers.metadata_database.repositories import BusinessPartnerRepository
 
 class PartnerManagementService():
