@@ -1,29 +1,26 @@
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
-class EnablementServiceStackBase(BaseModel):
-    name: str = Field(..., description="Name of the enablement service stack")
-    legal_entity_id: int = Field(..., description="ID of the associated legal entity")
-    # Add other fields as needed
+class BpnlBase(BaseModel):
+    bpnl: str = Field(..., description="The BPNL (Business Partner Number) of the legal entity.")
 
-class EnablementServiceStackCreate(EnablementServiceStackBase):
+class LegalEntityBase(BpnlBase):
     pass
 
-class EnablementServiceStackUpdate(BaseModel):
-    name: Optional[str] = Field(None, description="Name of the enablement service stack")
-    # Add other updatable fields as needed
+class LegalEntityCreate(LegalEntityBase):
+    pass
 
-class EnablementServiceStackRead(EnablementServiceStackBase):
-    id: int
-    class Config:
-        from_attributes = True
+class LegalEntityUpdate(BaseModel):
+    bpnl: Optional[str] = Field(None, description="The BPNL of the legal entity.")
+
+class LegalEntityRead(LegalEntityBase):
+    pass
 
 class EdcServiceBase(BaseModel):
     name: str = Field(..., description="Name of the EDC service")
     connection_settings: Optional[Dict[str, Any]] = Field(None, description="Connection settings as JSON")
-    legal_entity_id: int = Field(..., description="ID of the associated legal entity")
 
-class EdcServiceCreate(EdcServiceBase):
+class EdcServiceCreate(EdcServiceBase, BpnlBase):
     pass
 
 class EdcServiceUpdate(BaseModel):
@@ -31,9 +28,7 @@ class EdcServiceUpdate(BaseModel):
     connection_settings: Optional[Dict[str, Any]] = Field(None, description="Connection settings as JSON")
 
 class EdcServiceRead(EdcServiceBase):
-    id: int
-    class Config:
-        from_attributes = True
+    legal_entity: LegalEntityRead = Field(alias="legalEntity", description="The legal entity associated with the EDC service")
 
 class DtrServiceBase(BaseModel):
     name: str = Field(..., description="Name of the DTR service")
@@ -47,6 +42,20 @@ class DtrServiceUpdate(BaseModel):
     connection_settings: Optional[Dict[str, Any]] = Field(None, description="Connection settings as JSON")
 
 class DtrServiceRead(DtrServiceBase):
-    id: int
-    class Config:
-        from_attributes = True
+    pass
+
+class EnablementServiceStackBase(BaseModel):
+    name: str = Field(..., description="Name of the enablement service stack")
+    settings: Optional[Dict[str, Any]] = Field(None, description="Settings for the enablement service stack as JSON")
+
+class EnablementServiceStackCreate(EnablementServiceStackBase):
+    edc_name: str = Field(alias="edcName", description="Name of the EDC service associated with the stack")
+    dtr_name: str = Field(alias="dtrName", description="Name of the DTR service associated with the stack")
+
+class EnablementServiceStackUpdate(BaseModel):
+    name: Optional[str] = Field(None, description="Name of the enablement service stack")
+    # Add other updatable fields as needed
+
+class EnablementServiceStackRead(EnablementServiceStackBase):
+    edc_service: EdcServiceRead = Field(alias="edcService", description="The EDC service associated with the stack")
+    dtr_service: DtrServiceRead = Field(alias="dtrService", description="The DTR service associated with the stack")
