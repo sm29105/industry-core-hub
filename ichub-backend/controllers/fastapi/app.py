@@ -35,7 +35,8 @@ from .routers import (
     partner_management,
     twin_management,
     submodel_dispatcher,
-    sharing_handler
+    sharing_handler,
+    system_management,
 )
 
 tags_metadata = [
@@ -58,7 +59,11 @@ tags_metadata = [
     {
         "name": "Submodel Dispatcher",
         "description": "Internal API called by EDC Data Planes or Admins in order the deliver data of of the internal used Submodel Service"
-    }
+    },
+    {
+        "name": "System Management",
+        "description": "Management of integrated system components (EDC, DTR, etc.)"
+    },
 ]
 
 app = FastAPI(title="Industry Core Hub Backend API", version="0.0.1", openapi_tags=tags_metadata)
@@ -69,6 +74,7 @@ app.include_router(partner_management.router)
 app.include_router(twin_management.router)
 app.include_router(submodel_dispatcher.router)
 app.include_router(sharing_handler.router)
+app.include_router(system_management.router)
 
 @app.exception_handler(BaseError)
 async def base_error_exception_handler(
