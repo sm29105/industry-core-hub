@@ -529,7 +529,7 @@ class TwinManagementService:
             )
 
             # Step 4b: Ensure DTR asset is registered
-            # TODO: to be removed later as no longer concern if this module
+            # TODO: make this a more explicit operation out of System Management Service
             SystemManagementService.ensure_dtr_asset_registration()
 
             # Step 5: Handle the submodel service
@@ -610,6 +610,7 @@ class TwinManagementService:
             )
 
             # Step 5b: Ensure DTR asset is registered
+            # TODO: make this a more explicit operation out of System Management Service
             SystemManagementService.ensure_dtr_asset_registration()
 
             # Step 6: Handle the submodel service
