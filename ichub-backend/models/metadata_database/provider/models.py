@@ -63,7 +63,7 @@ class LegalEntity(SQLModel, table=True):
 
     Relationships:
         catalog_parts (List["CatalogPart"]):  A list of catalog parts offered by this legal entity.
-        enablement_service_stacks (List["EnablementServiceStack"]): A list of enablement service stacks associated with this legal entity.
+        connector_control_planes (List["ConnectorControlPlane"]): A list of connector control planes associated with this legal entity.
 
     Table Name:
         legal_entity
@@ -73,7 +73,7 @@ class LegalEntity(SQLModel, table=True):
 
     # Relationships
     catalog_parts: List["CatalogPart"] = Relationship(back_populates="legal_entity")
-    enablement_service_stacks: List["EnablementServiceStack"] = Relationship(back_populates="legal_entity")
+    connector_control_planes: List["ConnectorControlPlane"] = Relationship(back_populates="legal_entity")
 
     __tablename__ = "legal_entity"
 

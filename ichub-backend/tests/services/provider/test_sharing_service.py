@@ -73,7 +73,9 @@ class TestSharingService:
             manufacturerId="BPNL123456789012",
             manufacturerPartId="PART001",
             businessPartnerNumber="BPNL987654321098",
-            customerPartId="CUST001"
+            customerPartId="CUST001",
+            twinRegistryName="TestRegistry",
+            connectorControlPlaneName="TestControlPlane"
         )
 
     @pytest.fixture
@@ -516,7 +518,9 @@ class TestSharingService:
                 manufacturerId="BPNL123456789012",
                 manufacturerPartId="PART001",
                 businessPartnerNumber="BPNL987654321098",
-                customerPartId="CUST001"
+                customerPartId="CUST001",
+                twinRegistryName="TestRegistry",
+                connectorControlPlaneName="TestControlPlane"
             )
             
             # Act
@@ -581,7 +585,9 @@ class TestSharingService:
                 manufacturerId="BPNL123456789012",
                 manufacturerPartId="PART001",
                 businessPartnerNumber="BPNL987654321098",
-                customerPartId="CUST001"
+                customerPartId="CUST001",
+                twinRegistryName="TestRegistry",
+                connectorControlPlaneName="TestControlPlane"
             )
             
             # Act

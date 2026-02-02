@@ -67,6 +67,8 @@ class DtrProviderManager:
             base_lookup_url=dtr_lookup_url,
             api_path=api_path,
         )
+
+        # TODO: remove this and inject it as parameters to methods that need it
         self.connector_controlplane_hostname = connector_controlplane_hostname
         self.connector_controlplane_catalog_path = connector_controlplane_catalog_path
         self.connector_dataplane_hostname = connector_dataplane_hostname

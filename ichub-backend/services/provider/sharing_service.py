@@ -195,7 +195,7 @@ class SharingService:
         twin_read = self.twin_management_service.create_catalog_part_twin(CatalogPartTwinCreate(
             manufacturerId=catalog_part_to_share.manufacturer_id,
             manufacturerPartId=catalog_part_to_share.manufacturer_part_id,
-            enablementServiceStackName=catalog_part_to_share.enablement_service_stack_name,
+            twinRegistryName=catalog_part_to_share.twin_registry_name,
         ))
         db_twin = repo.twin_repository.find_by_global_id(twin_read.global_id)
         return db_twin
