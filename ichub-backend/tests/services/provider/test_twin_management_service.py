@@ -651,13 +651,18 @@ class TestTwinManagementService:
         mock_repo_factory.return_value.__enter__.return_value = mock_repo
         mock_repo.twin_repository.find_by_global_id.return_value = mock_twin
         mock_repo.twin_aspect_repository.get_by_twin_id_semantic_id.return_value = None
+        
+        # Setup twin registry mock
+        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        
+        # Setup connector control plane mock
         mock_repo.connector_control_plane_repository.get_by_name.return_value = mock_connector_control_plane
 
         mock_new_aspect = Mock()
         mock_new_aspect.id = 1
         mock_new_aspect.semantic_id = sample_semantic_id
         mock_new_aspect.submodel_id = UUID("12345678-1234-1234-1234-123456789012")
-        mock_new_aspect.find_registration_by_stack_id.return_value = None
+        mock_new_aspect.find_registration_by_twin_registry_id.return_value = None
         mock_repo.twin_aspect_repository.create_new.return_value = mock_new_aspect
         
         mock_registration = Mock()
@@ -666,9 +671,6 @@ class TestTwinManagementService:
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
         mock_repo.twin_aspect_registration_repository.create_new.return_value = mock_registration
-        
-        # Mock the find_registration_by_stack_id to return the registration after creation
-        mock_new_aspect.find_registration_by_stack_id.return_value = mock_registration
         
         # Mock configuration
         mock_config.get_config.return_value = {
