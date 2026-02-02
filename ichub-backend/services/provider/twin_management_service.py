@@ -511,7 +511,7 @@ class TwinManagementService:
 
             # Consistency check of the manufacturer id with the connector control plane
             if manufacturer_id != db_connector_control_plane.legal_entity.bpnl:
-                raise InvalidError(f"Manufacturer ID '{manufacturer_id}' does not match with connector control plane's manufacturer ID '{db_connector_control_plane.manufacturer_id}'.")
+                raise InvalidError(f"Manufacturer ID '{manufacturer_id}' does not match with connector control plane's manufacturer ID '{db_connector_control_plane.legal_entity.bpnl}'.")
 
             # Step 3: Retrieve a potentially existing twin aspect entity for the given twin_id and semantic_id
             db_twin_aspect = repo.twin_aspect_repository.get_by_twin_id_semantic_id(
