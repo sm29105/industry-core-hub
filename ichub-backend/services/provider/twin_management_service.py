@@ -37,7 +37,6 @@ from models.services.provider.twin_management import (
     CatalogPartTwinCreate,
     CatalogPartTwinShareCreate,
     CatalogPartTwinDetailsRead,
-    ConnectorRegistrationData,
     SerializedPartTwinCreate,
     SerializedPartTwinRead,
     SerializedPartTwinShareCreate,
@@ -79,7 +78,12 @@ class TwinManagementService:
         trimmed = str(value).strip()
         return trimmed if trimmed else None
 
-    def create_catalog_part_twin(self, create_input: CatalogPartTwinCreate, auto_create_part_type_information: Optional[ConnectorRegistrationData] = None) -> TwinRead:
+    def create_catalog_part_twin(self,
+        create_input: CatalogPartTwinCreate,
+        auto_create_part_type_information: Optional[bool] = None,
+        db_twin_registry_id: int = 1,
+        db_connector_control_plane_id: int = 1) -> TwinRead:
+        
         with RepositoryManagerFactory.create() as repo:
             # Step 1: Retrieve the catalog part entity according to the catalog part data (manufacturer_id, manufacturer_part_id)
             db_catalog_parts = repo.catalog_part_repository.find_by_manufacturer_id_manufacturer_part_id(
@@ -94,11 +98,11 @@ class TwinManagementService:
 
             # Step 2: Retrieve the twin registry entity from the DB according to the given name
             # (if not there => raise error)
-            db_twin_registry = repo.twin_registry_repository.get_by_name(
-                create_input.twin_registry_name
+            db_twin_registry = repo.twin_registry_repository.find_by_id(
+                db_twin_registry_id
             )
             if not db_twin_registry:
-                raise NotFoundError(f"Twin registry '{create_input.twin_registry_name}' not found.")
+                raise NotFoundError(f"Twin registry with ID '{db_twin_registry_id}' not found.")
 
             # Step 3a: Load existing twin metadata from the DB (if there)
             if db_catalog_part.twin_id:
@@ -185,9 +189,9 @@ class TwinManagementService:
                         globalId= db_twin.global_id,
                         semanticId= SEM_ID_PART_TYPE_INFORMATION_V1,
                         payload= part_type_info_doc,
-                        twinRegistryName= create_input.twin_registry_name,
-                        connectorControlPlaneName= auto_create_part_type_information.connector_control_plane_name
-                    )                    
+                    ),
+                    db_twin_registry_id,
+                    db_connector_control_plane_id                    
                 )
             
             return TwinRead(
@@ -272,7 +276,12 @@ class TwinManagementService:
                 db_business_partner=db_business_partner
             )
 
-    def create_serialized_part_twin(self, create_input: SerializedPartTwinCreate, auto_create_serial_part_aspect: Optional[ConnectorRegistrationData] = None) -> TwinRead:
+    def create_serialized_part_twin(self,
+        create_input: SerializedPartTwinCreate,
+        auto_create_serial_part_aspect: Optional[bool] = False,
+        db_twin_registry_id: int = 1,
+        db_connector_control_plane_id: int = 1) -> TwinRead:
+
         with RepositoryManagerFactory.create() as repo:
             # Step 1: Retrieve the catalog part entity according to the catalog part data (manufacturer_id, manufacturer_part_id)
             db_serialized_parts = repo.serialized_part_repository.find(
@@ -290,11 +299,11 @@ class TwinManagementService:
             
             # Step 2: Retrieve the twin registry entity from the DB according to the given name
             # (if not there => raise error)
-            db_twin_registry = repo.twin_registry_repository.get_by_name(
-                create_input.twin_registry_name
+            db_twin_registry = repo.twin_registry_repository.find_by_id(
+                db_twin_registry_id
             )
             if not db_twin_registry:
-                raise NotFoundError(f"Twin registry '{create_input.twin_registry_name}' not found.")
+                raise NotFoundError(f"Twin registry  with ID '{db_twin_registry_id}' not found.")
             
             # Step 3a: Load existing twin metadata from the DB (if there)
             if db_serialized_part.twin_id:
@@ -382,10 +391,10 @@ class TwinManagementService:
                     TwinAspectCreate(
                         globalId=db_twin.global_id,
                         semanticId=SEM_ID_SERIAL_PART_V3,
-                        payload=serial_part_doc,
-                        twinRegistryName=create_input.twin_registry_name,
-                        connectorControlPlaneName=auto_create_serial_part_aspect.connector_control_plane_name
-                    )
+                        payload=serial_part_doc
+                    ),
+                    db_twin_registry_id,
+                    db_connector_control_plane_id
                 )
 
             return TwinRead(
@@ -477,7 +486,10 @@ class TwinManagementService:
                 db_business_partner=db_business_partner
             )
 
-    def create_twin_aspect(self, twin_aspect_create: TwinAspectCreate) -> TwinAspectRead:
+    def create_twin_aspect(self,
+        twin_aspect_create: TwinAspectCreate,
+        db_twin_registry_id: int = 1,
+        db_connector_control_plane_id: int = 1) -> TwinAspectRead:
         """
         Create a new twin aspect for a give twin.
         """
@@ -494,21 +506,21 @@ class TwinManagementService:
 
             # Step 2a: Retrieve the twin registry entity from the DB according to the given name
             # (if not there => raise error)
-            db_twin_registry = repo.twin_registry_repository.get_by_name(
-                twin_aspect_create.twin_registry_name
+            db_twin_registry = repo.twin_registry_repository.find_by_id(
+                db_twin_registry_id
             )
             if not db_twin_registry:
-                raise NotFoundError(f"Twin registry '{twin_aspect_create.twin_registry_name}' not found.")
+                raise NotFoundError(f"Twin registry with ID '{db_twin_registry_id}' not found.")
 
             # Step 2b: Retrieve the connector control plane entity from the DB according to the given name
             # (if not there => raise error)
-            db_connector_control_plane = repo.connector_control_plane_repository.get_by_name(
-                twin_aspect_create.connector_control_plane_name,
+            db_connector_control_plane = repo.connector_control_plane_repository.get_by_id(
+                db_connector_control_plane_id,
                 join_legal_entity=True
             )
             if not db_connector_control_plane:
-                raise NotFoundError(f"Connector control plane '{twin_aspect_create.connector_control_plane_name}' not found.")
-
+                raise NotFoundError(f"Connector control plane with ID '{db_connector_control_plane_id}' not found.")
+            
             # Consistency check of the manufacturer id with the connector control plane
             if manufacturer_id != db_connector_control_plane.legal_entity.bpnl:
                 raise InvalidError(f"Manufacturer ID '{manufacturer_id}' does not match with connector control plane's manufacturer ID '{db_connector_control_plane.legal_entity.bpnl}'.")
@@ -545,7 +557,10 @@ class TwinManagementService:
 
             return self._create_twin_aspect_read_response(db_twin_aspect, db_twin_registry, db_connector_control_plane, db_twin_aspect_registration)
         
-    def create_or_update_twin_aspect_not_default(self, twin_aspect_create: TwinAspectCreate) -> TwinAspectRead:
+    def create_or_update_twin_aspect_not_default(self,
+        twin_aspect_create: TwinAspectCreate,
+        db_twin_registry_id: int = 1,
+        db_connector_control_plane_id: int = 1) -> TwinAspectRead:
         """
         Create or update a twin aspect for a give twin without using the default Twin Registry and Connector Control Plane.
         """
@@ -562,20 +577,20 @@ class TwinManagementService:
 
             # Step 3a: Retrieve the twin registry entity from the DB according to the given name
             # (if not there => raise error)
-            db_twin_registry = repo.twin_registry_repository.get_by_name(
-                twin_aspect_create.twin_registry_name
+            db_twin_registry = repo.twin_registry_repository.find_by_id(
+                db_twin_registry_id
             )
             if not db_twin_registry:
-                raise NotFoundError(f"Twin registry '{twin_aspect_create.twin_registry_name}' not found.")
+                raise NotFoundError(f"Twin registry with ID '{db_twin_registry_id}' not found.")
 
             # Step 3b: Retrieve the connector control plane entity from the DB according to the given name
             # (if not there => raise error)
-            db_connector_control_plane = repo.connector_control_plane_repository.get_by_name(
-                twin_aspect_create.connector_control_plane_name,
+            db_connector_control_plane = repo.connector_control_plane_repository.get_by_id(
+                db_connector_control_plane_id,
                 join_legal_entity=True
             )
             if not db_connector_control_plane:
-                raise NotFoundError(f"Connector control plane '{twin_aspect_create.connector_control_plane_name}' not found.")
+                raise NotFoundError(f"Connector control plane with ID '{db_connector_control_plane_id}' not found.")
 
             # Consistency check of the manufacturer id with the connector control plane
             if manufacturer_id != db_connector_control_plane.legal_entity.bpnl:
@@ -597,11 +612,11 @@ class TwinManagementService:
                 else:
                     # Update existing twin aspect
                     self._handle_submodel_service_update(
-                        repo, db_twin_aspect.registrations[0], db_connector_control_plane, db_twin_aspect, twin_aspect_create
+                        repo, db_twin_aspect.twin_aspect_registrations[0], db_twin_aspect, db_connector_control_plane, twin_aspect_create
                     )
                     repo.commit()
                     repo.refresh(db_twin_aspect)
-                    return self._create_twin_aspect_read_response(db_twin_aspect, db_twin_registry, db_connector_control_plane, db_twin_aspect.registrations[0])
+                    return self._create_twin_aspect_read_response(db_twin_aspect, db_twin_registry, db_connector_control_plane, db_twin_aspect.twin_aspect_registrations[0])
             
 
             # Step 5a: Check if there is already a registration for the given Twin Registry stack and create it if not
@@ -732,8 +747,6 @@ class TwinManagementService:
         Create and return the TwinAspectRead response object.
         """
         registration_data = SvcTwinAspectRegistration(
-            twinRegistryName=db_twin_registry.name,
-            connectorControlPlaneName=db_connector_control_plane.name,
             status=TwinAspectRegistrationStatus(db_twin_aspect_registration.status),
             mode=TwinsAspectRegistrationMode(db_twin_aspect_registration.registration_mode),
             createdDate=db_twin_aspect_registration.created_date,

@@ -675,6 +675,12 @@ class TwinRegistrationRepository(BaseRepository[TwinRegistration]):
         return twin_registration
 
 class ConnectorControlPlaneRepository(BaseRepository[ConnectorControlPlane]):
+    def get_by_id(self, id: int, join_legal_entity: bool = False) -> Optional[ConnectorControlPlane]:
+        stmt = select(ConnectorControlPlane).where(ConnectorControlPlane.id == id)
+        if join_legal_entity:   
+            stmt = stmt.join(LegalEntity, LegalEntity.id == ConnectorControlPlane.legal_entity_id)
+        return self._session.scalars(stmt).first()
+
     def get_by_name(self, name: str, join_legal_entity: bool = False) -> Optional[ConnectorControlPlane]:
         stmt = select(ConnectorControlPlane).where(ConnectorControlPlane.name == name)
         if join_legal_entity:   

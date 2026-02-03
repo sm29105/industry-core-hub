@@ -66,17 +66,7 @@ class TwinsAspectRegistrationMode(enum.Enum):
     DISPATCHED = 2
     """No extra asset has been generated within the Eclipse Dataspace Connector for the aspect document - instead there is a bundle asset that points to a dispatching service"""
 
-class TwinRegistryRegistrationData(BaseModel):
-    """Represents endpoint data for a twin registration within a DTR."""
-
-    twin_registry_name: str = Field(alias="twinRegistryName", description="The name of the Digital Twin Registry where the digital twin should be registered.")
-
-class ConnectorRegistrationData(BaseModel):
-    """Represents endpoint data for a twin aspect registration within a DTR."""
-
-    connector_control_plane_name: str = Field(alias="connectorControlPlaneName", description="The name of the connector control plane where the aspect is registered.")
-    
-class TwinAspectRegistration(ConnectorRegistrationData, TwinRegistryRegistrationData):
+class TwinAspectRegistration(BaseModel):
     """Represents the registration of a twin aspect within a DTR."""
 
     status: TwinAspectRegistrationStatus = Field(description="The current status of the aspect registration process.")
@@ -89,7 +79,7 @@ class TwinAspectRead(BaseModel):
     submodel_id: UUID = Field(alias="submodelId", description="The ID of the submodel descriptor within the DTR shell descriptor for the associated twin.")
     registrations: Optional[Dict[str, TwinAspectRegistration]] = Field(description="A map of registration information for the aspect in different twin registries. The key is the name of the twin registry.", default={})
 
-class TwinAspectCreate(ConnectorRegistrationData, TwinRegistryRegistrationData):
+class TwinAspectCreate(BaseModel):
     global_id: UUID = Field(alias="globalId", description="The Catena-X ID / global ID of the digital twin to which the new aspect belongs.")
     semantic_id: str = Field(alias="semanticId", description="The semantic ID of the new aspect determining the structure of the associated payload data.")
     submodel_id: Optional[UUID] = Field(alias="submodelId", description="The optional ID of the submodel descriptor within the DTR shell descriptor for the associated twin. If not specified, a new UUID will be created automatically.", default=None) 
@@ -104,7 +94,7 @@ class TwinRead(BaseModel):
     modified_date: datetime = Field(alias="modifiedDate", description="The date when the digital twin was last modified.")
     shares: Optional[List[DataExchangeAgreementRead]] = Field(description="A list of data exchange agreements the digital twin is shared via.", default=None)
 
-class TwinCreateBase(TwinRegistryRegistrationData):
+class TwinCreateBase(BaseModel):
     """Represents a digital twin to be created within the Digital Twin Registry."""
 
     global_id: Optional[UUID] = Field(alias="globalId", description="Optionally the Catena-X ID / global ID of the digital twin to create. If not specified, a new UUID will be created automatically.", default=None)

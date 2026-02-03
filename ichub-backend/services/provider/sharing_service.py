@@ -51,7 +51,12 @@ class SharingService:
     def get_shared_partners(self, manufacturer_id:str, manufacturer_part_id:str) -> List[SharedPartner]:
         pass
     
-    def share_catalog_part(self, catalog_part_to_share: ShareCatalogPart) -> SharedPartBase:
+    def share_catalog_part(self,
+        catalog_part_to_share: ShareCatalogPart,
+        db_twin_registry_id: int = 1,
+        db_connector_control_plane_id: int = 1
+        ) -> SharedPartBase:
+        
         shared_at = datetime.now(timezone.utc)
         with RepositoryManagerFactory.create() as repo:
             # Step 1: Retrieve the catalog part from the repository
@@ -67,7 +72,7 @@ class SharingService:
             db_partner_catalog_parts:Dict[str, BusinessPartnerRead] = self._get_or_create_partner_catalog_parts(repo, catalog_part_to_share.customer_part_id, db_catalog_part, db_business_partner)
             
             # Step 5: Create and retrieve the catalog part twin
-            db_twin = self._create_and_get_twin(repo, catalog_part_to_share)
+            db_twin = self._create_and_get_twin(repo, catalog_part_to_share, db_twin_registry_id)
             
             # Step 8: Ensure a twin exchange exists between the twin and the data exchange agreement
             self._ensure_twin_exchange(repo, db_twin, db_data_exchange_agreement)
@@ -83,10 +88,10 @@ class SharingService:
                 TwinAspectCreate(
                     globalId=db_twin.global_id,
                     semanticId=SEM_ID_PART_TYPE_INFORMATION_V1,
-                    payload=part_type_info_doc,
-                    twinRegistryName=catalog_part_to_share.twin_registry_name,
-                    connectorControlPlaneName=catalog_part_to_share.connector_control_plane_name
-                )
+                    payload=part_type_info_doc
+                ),
+                db_twin_registry_id=db_twin_registry_id,
+                db_connector_control_plane_id=db_connector_control_plane_id
             )
             # Step 9: Return the shared part information
             return SharedPartBase(
@@ -188,15 +193,18 @@ class SharingService:
         repo.refresh(db_partner_catalog_part)
         return db_partner_catalog_part
 
-    def _create_and_get_twin(self, repo: RepositoryManager, catalog_part_to_share: ShareCatalogPart) -> Twin:
+    def _create_and_get_twin(self,
+        repo: RepositoryManager,
+        catalog_part_to_share: ShareCatalogPart,
+        db_twin_registry_id: int
+        ) -> Twin:
         """
         Create a catalog part twin and retrieve its database representation.
         """
         twin_read = self.twin_management_service.create_catalog_part_twin(CatalogPartTwinCreate(
             manufacturerId=catalog_part_to_share.manufacturer_id,
-            manufacturerPartId=catalog_part_to_share.manufacturer_part_id,
-            twinRegistryName=catalog_part_to_share.twin_registry_name,
-        ))
+            manufacturerPartId=catalog_part_to_share.manufacturer_part_id
+        ), db_twin_registry_id=db_twin_registry_id)
         db_twin = repo.twin_repository.find_by_global_id(twin_read.global_id)
         return db_twin
 

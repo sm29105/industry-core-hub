@@ -28,13 +28,13 @@ from pydantic import BaseModel, Field
 
 
 from models.services.provider.part_management import CatalogPartBase, BusinessPartnerRead
-from models.services.provider.twin_management import CatalogPartTwinDetailsRead, ConnectorRegistrationData, TwinRegistryRegistrationData
+from models.services.provider.twin_management import CatalogPartTwinDetailsRead
 
 class SharingBase(BaseModel):
     business_partner_number: str = Field(alias="businessPartnerNumber", description="The business partner number of the business partner with which the catalog part is shared.")
     customer_part_id: Optional[str] = Field(alias="customerPartId", description="The customer part ID which will be mapped to the respective Business Partner", default=None)
 
-class ShareCatalogPart(SharingBase, CatalogPartBase, ConnectorRegistrationData, TwinRegistryRegistrationData):
+class ShareCatalogPart(SharingBase, CatalogPartBase):
     """Class that stores the information required by request in the sharing functionalit, for catalog parts"""
 
 class SharedPartBase(BaseModel):

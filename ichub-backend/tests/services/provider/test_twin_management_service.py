@@ -237,8 +237,7 @@ class TestTwinManagementService:
             manufacturerId=sample_manufacturer_id,
             manufacturerPartId=sample_manufacturer_part_id,
             globalId=sample_global_id,
-            dtrAasId=sample_aas_id,
-            twinRegistryName="TestRegistry"
+            dtrAasId=sample_aas_id
         )
 
         mock_repo = Mock()
@@ -264,8 +263,7 @@ class TestTwinManagementService:
         # Arrange
         create_input = CatalogPartTwinCreate(
             manufacturerId=sample_manufacturer_id,
-            manufacturerPartId=sample_manufacturer_part_id,
-            twinRegistryName="TestRegistry"
+            manufacturerPartId=sample_manufacturer_part_id
         )
 
         mock_repo = Mock()
@@ -336,7 +334,6 @@ class TestTwinManagementService:
             partInstanceId=sample_part_instance_id,
             globalId=sample_global_id,
             dtrAasId=sample_aas_id,
-            twinRegistryName="TestRegistry"
         )
 
         mock_serialized_part = Mock()
@@ -642,9 +639,7 @@ class TestTwinManagementService:
         twin_aspect_create = TwinAspectCreate(
             globalId=sample_global_id,
             semanticId=sample_semantic_id,
-            payload=sample_payload,
-            twinRegistryName=mock_digital_twin_registry.name,
-            connectorControlPlaneName=mock_connector_control_plane.name
+            payload=sample_payload
         )
         
         mock_repo = Mock()
@@ -653,10 +648,10 @@ class TestTwinManagementService:
         mock_repo.twin_aspect_repository.get_by_twin_id_semantic_id.return_value = None
         
         # Setup twin registry mock
-        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        mock_repo.twin_registry_repository.find_by_id.return_value = mock_digital_twin_registry
         
         # Setup connector control plane mock
-        mock_repo.connector_control_plane_repository.get_by_name.return_value = mock_connector_control_plane
+        mock_repo.connector_control_plane_repository.get_by_id.return_value = mock_connector_control_plane
 
         mock_new_aspect = Mock()
         mock_new_aspect.id = 1
@@ -691,7 +686,9 @@ class TestTwinManagementService:
         
         with patch.object(self.service, '_get_manufacturer_id_from_twin', return_value=mock_connector_control_plane.legal_entity.bpnl):
             # Act
-            result = self.service.create_twin_aspect(twin_aspect_create)
+            result = self.service.create_twin_aspect(twin_aspect_create,
+                                                     mock_digital_twin_registry.id,
+                                                     mock_connector_control_plane.id)
             
             # Assert
             assert isinstance(result, TwinAspectRead)
@@ -711,9 +708,7 @@ class TestTwinManagementService:
         twin_aspect_create = TwinAspectCreate(
             globalId=sample_global_id,
             semanticId=sample_semantic_id,
-            payload=sample_payload,
-            twinRegistryName=mock_digital_twin_registry.name,
-            connectorControlPlaneName=mock_connector_control_plane.name
+            payload=sample_payload
         )
         
         mock_repo = Mock()
@@ -733,10 +728,10 @@ class TestTwinManagementService:
         mock_repo.twin_aspect_registration_repository.create_new.return_value = mock_registration
 
         # Setup twin registry mock
-        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        mock_repo.twin_registry_repository.find_by_id.return_value = mock_digital_twin_registry
         
         # Setup connector control plane mock
-        mock_repo.connector_control_plane_repository.get_by_name.return_value = mock_connector_control_plane
+        mock_repo.connector_control_plane_repository.get_by_id.return_value = mock_connector_control_plane
 
         # Mock the find_registration_by_twin_registry_id to return the registration
         mock_new_aspect2.find_registration_by_twin_registry_id.return_value = mock_registration
@@ -760,7 +755,9 @@ class TestTwinManagementService:
         
         with patch.object(self.service, '_get_manufacturer_id_from_twin', return_value=mock_connector_control_plane.legal_entity.bpnl):
             # Act
-            result = self.service.create_or_update_twin_aspect_not_default(twin_aspect_create)
+            result = self.service.create_or_update_twin_aspect_not_default(twin_aspect_create,
+                                                                           mock_digital_twin_registry.id,
+                                                                           mock_connector_control_plane.id)
             
             # Assert
             assert isinstance(result, TwinAspectRead)
@@ -779,9 +776,7 @@ class TestTwinManagementService:
             globalId=sample_global_id,
             semanticId=sample_semantic_id,
             submodelId=submodel_id,
-            payload=sample_payload,
-            twinRegistryName=mock_digital_twin_registry.name,
-            connectorControlPlaneName=mock_connector_control_plane.name
+            payload=sample_payload
         )
         
         mock_existing_aspect = Mock()
@@ -794,7 +789,7 @@ class TestTwinManagementService:
         mock_registration.registration_mode = TwinsAspectRegistrationMode.DISPATCHED.value
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
-        mock_existing_aspect.registrations = [mock_registration]
+        mock_existing_aspect.twin_aspect_registrations = [mock_registration]
         
         mock_repo = Mock()
         mock_repo_factory.return_value.__enter__.return_value = mock_repo
@@ -802,10 +797,10 @@ class TestTwinManagementService:
         mock_repo.twin_aspect_repository.get_by_twin_id_semantic_id_submodel_id.return_value = mock_existing_aspect
         
         # Setup twin registry mock
-        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        mock_repo.twin_registry_repository.find_by_id.return_value = mock_digital_twin_registry
         
         # Setup connector control plane mock
-        mock_repo.connector_control_plane_repository.get_by_name.return_value = mock_connector_control_plane
+        mock_repo.connector_control_plane_repository.get_by_id.return_value = mock_connector_control_plane
 
         # Mock submodel service manager
         mock_submodel_service = Mock()
@@ -813,7 +808,9 @@ class TestTwinManagementService:
         
         with patch.object(self.service, '_get_manufacturer_id_from_twin', return_value=mock_connector_control_plane.legal_entity.bpnl):
             # Act
-            result = self.service.create_or_update_twin_aspect_not_default(twin_aspect_create)
+            result = self.service.create_or_update_twin_aspect_not_default(twin_aspect_create,
+                                                                           mock_digital_twin_registry.id,
+                                                                           mock_connector_control_plane.id)
             
             # Assert
             assert isinstance(result, TwinAspectRead)
@@ -831,9 +828,7 @@ class TestTwinManagementService:
             globalId=sample_global_id,
             semanticId=sample_semantic_id,
             submodelId=submodel_id,
-            payload=sample_payload,
-            twinRegistryName=mock_digital_twin_registry.name,
-            connectorControlPlaneName=mock_connector_control_plane.name
+            payload=sample_payload
         )
         
         mock_existing_aspect = Mock()
@@ -1026,9 +1021,7 @@ class TestTwinManagementService:
         twin_aspect_create = TwinAspectCreate(
             globalId=sample_global_id,
             semanticId=sample_semantic_id,
-            payload={},
-            twinRegistryName=mock_digital_twin_registry.name,
-            connectorControlPlaneName=mock_connector_control_plane.name
+            payload={}
         )
         
         mock_new_aspect = Mock()

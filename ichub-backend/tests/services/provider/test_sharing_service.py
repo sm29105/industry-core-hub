@@ -398,7 +398,7 @@ class TestSharingService:
         mock_repo.twin_repository.find_by_global_id.return_value = sample_twin_db
         
         # Act
-        result = self.service._create_and_get_twin(mock_repo, sample_share_catalog_part)
+        result = self.service._create_and_get_twin(mock_repo, sample_share_catalog_part, 1)
         
         # Assert
         assert result == sample_twin_db
