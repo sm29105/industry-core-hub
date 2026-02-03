@@ -286,20 +286,29 @@ class SystemManagementService:
         """
         Get the DtrProviderManager.
         """
+        if db_twin_registry is None:
+            raise NotAvailableError("TwinRegistry is None, cannot create DtrProviderManager.")  
+        
+        if db_twin_registry.id == 1:
+            return dtr_provider_manager
+        
         # TODO: create connection based on config in the database
-
-        return dtr_provider_manager
+        raise NotAvailableError("DtrProviderManager for the given TwinRegistry is not available.")
 
     @staticmethod
     def get_connector_manager(db_connector_control_plane: ConnectorControlPlane) -> ConnectorProviderManager:
         """
         Get the ConnectorManager.
         """
+        if db_connector_control_plane is None:
+            raise NotAvailableError("ConnectorControlPlane is None, cannot create ConnectorProviderManager.")
+        
+        if db_connector_control_plane.id == 1:
+            return connector_manager.provider
+        
         # TODO: later we can configure the manager via the connection settings from the DB here
-
         # TODO: implement caching
-
-        return connector_manager.provider
+        raise NotAvailableError("ConnectorProviderManager for the given ConnectorControlPlane is not available.")
     
     @staticmethod
     def ensure_dtr_asset_registration() -> None:
