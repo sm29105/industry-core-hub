@@ -727,6 +727,7 @@ class TestTwinManagementService:
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
         mock_registration.twin_registry = mock_digital_twin_registry
+        mock_registration.connector_control_plane_id = mock_connector_control_plane.id
         mock_repo.twin_aspect_registration_repository.create_new.return_value = mock_registration
 
         # Setup twin registry mock
@@ -735,8 +736,8 @@ class TestTwinManagementService:
         # Setup connector control plane mock
         mock_repo.connector_control_plane_repository.get_by_id.return_value = mock_connector_control_plane
 
-        # Mock the find_registration_by_twin_registry_id to return the registration
-        mock_new_aspect2.find_registration_by_twin_registry_id.return_value = mock_registration
+        # Mock the find_registration_by_twin_registry_id to return None (new registration)
+        mock_new_aspect2.find_registration_by_twin_registry_id.return_value = None
         
         # Mock configuration
         mock_config.get_config.return_value = {
@@ -962,6 +963,7 @@ class TestTwinManagementService:
         # Arrange
         mock_aspect = Mock()
         mock_existing_registration = Mock()
+        mock_existing_registration.connector_control_plane_id = mock_connector_control_plane.id
         mock_aspect.find_registration_by_twin_registry_id.return_value = mock_existing_registration
 
         mock_repo = Mock()

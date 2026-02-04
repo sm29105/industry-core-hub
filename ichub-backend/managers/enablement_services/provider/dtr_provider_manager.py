@@ -384,7 +384,7 @@ class DtrProviderManager:
             submodel_id = UUID(submodel_id)
         # Check that href and DSP URLs are valid
         
-        parsed_href_url = parse.urlparse(href_url)
+        parsed_href_url = parse.urlparse(f"{href_url}/{submodel_id.urn}/submodel")
         if not (parsed_href_url.scheme == "https" and parsed_href_url.netloc):
             raise InvalidError(f"Generated href URL is malformed: {href_url}")
 

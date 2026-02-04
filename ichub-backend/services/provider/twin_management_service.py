@@ -701,9 +701,8 @@ class TwinManagementService:
         connector_provider_manager = SystemManagementService.get_connector_manager(db_twin_aspect_registration.connector_control_plane)
 
         if db_twin_aspect_registration.status < TwinAspectRegistrationStatus.DTR_REGISTERED.value:               
-            href_url = f"{connector_provider_manager.connector_dataplane_hostname}{connector_provider_manager.connector_dataplane_public_path}/{submodel_id.urn}/submodel"
+            href_url = f"{connector_provider_manager.connector_dataplane_hostname}{connector_provider_manager.connector_dataplane_public_path}"
             dsp_endpoint_url = f"{connector_provider_manager.connector_controlplane_hostname}{connector_provider_manager.connector_controlplane_catalog_path}"
-
 
             # Register the submodel in the DTR (if necessary)
             try:
