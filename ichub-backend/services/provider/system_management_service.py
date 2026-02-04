@@ -289,7 +289,7 @@ class SystemManagementService:
         if db_twin_registry is None:
             raise NotAvailableError("TwinRegistry is None, cannot create DtrProviderManager.")  
         
-        if db_twin_registry.id == 1:
+        if db_twin_registry.is_default:
             return dtr_provider_manager
         
         # TODO: create connection based on config in the database
@@ -303,7 +303,7 @@ class SystemManagementService:
         if db_connector_control_plane is None:
             raise NotAvailableError("ConnectorControlPlane is None, cannot create ConnectorProviderManager.")
         
-        if db_connector_control_plane.id == 1:
+        if db_connector_control_plane.is_default:
             return connector_manager.provider
         
         # TODO: later we can configure the manager via the connection settings from the DB here

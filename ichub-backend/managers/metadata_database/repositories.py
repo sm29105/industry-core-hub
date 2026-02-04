@@ -614,6 +614,7 @@ class TwinAspectRegistrationRepository(BaseRepository[TwinAspectRegistration]):
         self,
         twin_aspect_id: int,
         twin_registry_id: int,
+        connector_control_plane_id: int,
         status: int = 0,
         registration_mode: int = 0,
     ) -> TwinAspectRegistration:
@@ -621,6 +622,7 @@ class TwinAspectRegistrationRepository(BaseRepository[TwinAspectRegistration]):
         twin_aspect_registration = TwinAspectRegistration(
             twin_aspect_id=twin_aspect_id,
             twin_registry_id=twin_registry_id,
+            connector_control_plane_id=connector_control_plane_id,
             status=status,
             registration_mode=registration_mode,
             created_date=datetime.now(timezone.utc),

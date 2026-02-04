@@ -624,16 +624,17 @@ class TwinManagementService:
             db_twin_aspect_registration = repo.twin_aspect_registration_repository.create_new(
                 twin_aspect_id=db_twin_aspect.id,
                 twin_registry_id=db_twin_registry.id,
-                # TODO: add Control Plane
+                connector_control_plane_id=db_connector_control_plane.id,
                 registration_mode=TwinsAspectRegistrationMode.DISPATCHED.value, 
             )
             repo.commit()
             repo.refresh(db_twin_aspect_registration)
             repo.refresh(db_twin_aspect)
-        else:
-            # TODO: later make consistency check with assigned Control Plane
-            pass
-
+        
+        # Consistency check for the control plane
+        elif db_twin_aspect_registration.connector_control_plane_id != db_connector_control_plane.id:
+            raise InvalidError("Twin aspect registration already exists with a different Connector Control Plane.")
+ 
         return db_twin_aspect_registration
 
     def _handle_submodel_service_upload(self, repo: RepositoryManager, db_twin_aspect_registration: TwinAspectRegistration, db_twin_aspect: TwinAspect, db_connector_control_plane: ConnectorControlPlane, twin_aspect_create: TwinAspectCreate) -> None:
