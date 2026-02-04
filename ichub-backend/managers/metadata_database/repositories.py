@@ -428,9 +428,13 @@ class TwinRepository(BaseRepository[Twin]):
         
         return twin
     
-    def find_by_global_id(self, global_id: UUID) -> Optional[Twin]:
+    def find_by_global_id(self, global_id: UUID, include_registrations: bool = False) -> Optional[Twin]:
         stmt = select(Twin).where(
             Twin.global_id == global_id)
+        
+        if include_registrations:
+            stmt = stmt.options(selectinload(Twin.twin_registrations))
+        
         return self._session.scalars(stmt).first()
     
     def find_by_aas_id(self, aas_id: UUID) -> Optional[Twin]:

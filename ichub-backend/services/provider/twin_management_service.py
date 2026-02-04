@@ -476,6 +476,22 @@ class TwinManagementService:
                 db_business_partner=db_business_partner
             )
 
+    def get_twin_registrations(self, global_id: UUID) -> Dict[int, bool]:
+        """
+        Get the twin registrations for a given twin global ID.
+        Returns a dictionary mapping twin registry IDs to their DTR registration status.
+        """
+
+        with RepositoryManagerFactory.create() as repo:
+            db_twin = repo.twin_repository.find_by_global_id(global_id, include_registrations=True)
+            if not db_twin:
+                raise NotFoundError(f"Twin for global ID '{global_id}' not found.")
+
+            return {
+                db_twin_registration.twin_registry_id: db_twin_registration.dtr_registered
+                for db_twin_registration in db_twin.twin_registrations
+            }
+
     def create_twin_aspect(self,
         twin_aspect_create: TwinAspectCreate,
         db_twin_registry_id: Optional[int] = None,
