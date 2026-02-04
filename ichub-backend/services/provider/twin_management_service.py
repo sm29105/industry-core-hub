@@ -503,7 +503,7 @@ class TwinManagementService:
         with RepositoryManagerFactory.create() as repo:
             
             # Step 1: Retrieve the twin entity according to the global_id
-            db_twin = repo.twin_repository.find_by_global_id(twin_aspect_create.global_id)
+            db_twin = repo.twin_repository.find_by_global_id(twin_aspect_create.global_id, include_registrations=True)
             if not db_twin:
                 raise NotFoundError(f"Twin for global ID '{twin_aspect_create.global_id}' not found.")
 
@@ -518,6 +518,10 @@ class TwinManagementService:
                 repo, db_connector_control_plane_id, join_legal_entity=True
             )
            
+            # Check if there is a twin_registration for the given twin registry and throw an error if not
+            if not any(reg.twin_registry_id == db_twin_registry.id for reg in db_twin.twin_registrations):
+                raise NotFoundError(f"Twin registration for twin registry ID '{db_twin_registry.id}' not found.")
+
             # Consistency check of the manufacturer id with the connector control plane
             if manufacturer_id != db_connector_control_plane.legal_entity.bpnl:
                 raise InvalidError(f"Manufacturer ID '{manufacturer_id}' does not match with connector control plane's manufacturer ID '{db_connector_control_plane.legal_entity.bpnl}'.")
