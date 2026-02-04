@@ -519,6 +519,7 @@ class ConnectorControlPlane(SQLModel, table=True):
     dataspace_version: str = Field(default="jupiter", description="The version of the dataspace release.")
     dma_path: str = Field(default="/management", description="The path to the Connector management API.")
     connection_settings: Optional[Dict[str, Any]] = Field(sa_column=Column(JSON), description="Connection settings stored as JSON")
+    is_default: bool = Field(default=False, description="Indicates if this is the default Connector Control Plane")
     legal_entity_id: int = Field(index=True, foreign_key="legal_entity.id", description="The ID of the associated legal entity.")
 
     # Relationships
@@ -552,6 +553,7 @@ class TwinRegistry(SQLModel, table=True):
     name: str = Field(index=True, unique=True, description="The name of the Twin Registry.")
     version: str = Field(default="3.0", description="The version of the Twin Registry.")
     connection_settings: Optional[Dict[str, Any]] = Field(sa_column=Column(JSON), description="Connection settings stored as JSON")
+    is_default: bool = Field(default=False, description="Indicates if this is the default Twin Registry")
 
     # Relationships
     enablement_service_stack: Optional["EnablementServiceStack"] = Relationship(back_populates="twin_registry")

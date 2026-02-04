@@ -686,8 +686,18 @@ class ConnectorControlPlaneRepository(BaseRepository[ConnectorControlPlane]):
         if join_legal_entity:   
             stmt = stmt.join(LegalEntity, LegalEntity.id == ConnectorControlPlane.legal_entity_id)
         return self._session.scalars(stmt).first()
+    
+    def get_default(self, join_legal_entity: bool = False) -> Optional[ConnectorControlPlane]:
+        stmt = select(ConnectorControlPlane).where(ConnectorControlPlane.is_default == True)
+        if join_legal_entity:   
+            stmt = stmt.join(LegalEntity, LegalEntity.id == ConnectorControlPlane.legal_entity_id)
+        return self._session.scalars(stmt).first()
 
 class TwinRegistryRepository(BaseRepository[TwinRegistry]):
     def get_by_name(self, name: str) -> Optional[TwinRegistry]:
         stmt = select(TwinRegistry).where(TwinRegistry.name == name)
+        return self._session.scalars(stmt).first()
+    
+    def get_default(self) -> Optional[TwinRegistry]:
+        stmt = select(TwinRegistry).where(TwinRegistry.is_default == True)
         return self._session.scalars(stmt).first()

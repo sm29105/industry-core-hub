@@ -246,7 +246,7 @@ class TestTwinManagementService:
         mock_repo.twin_repository.create_new.return_value = mock_twin
         mock_repo.twin_registration_repository.get_by_twin_id_twin_registry_id.return_value = None
         mock_repo.twin_registration_repository.create_new.return_value = Mock(dtr_registered=False)
-        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        mock_repo.twin_registry_repository.get_default.return_value = mock_digital_twin_registry
         
         # Act
         result = self.service.create_catalog_part_twin(create_input)
@@ -370,7 +370,7 @@ class TestTwinManagementService:
         mock_repo.twin_repository.create_new.return_value = mock_twin
         mock_repo.twin_registration_repository.get_by_twin_id_twin_registry_id.return_value = None
         mock_repo.twin_registration_repository.create_new.return_value = Mock(dtr_registered=False)
-        mock_repo.twin_registry_repository.get_by_name.return_value = mock_digital_twin_registry
+        mock_repo.twin_registry_repository.get_default.return_value = mock_digital_twin_registry
 
         # Act
         result = self.service.create_serialized_part_twin(create_input)
@@ -665,6 +665,7 @@ class TestTwinManagementService:
         mock_registration.registration_mode = TwinsAspectRegistrationMode.DISPATCHED.value
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
+        mock_registration.twin_registry = mock_digital_twin_registry
         mock_repo.twin_aspect_registration_repository.create_new.return_value = mock_registration
         
         # Mock configuration
@@ -725,6 +726,7 @@ class TestTwinManagementService:
         mock_registration.registration_mode = TwinsAspectRegistrationMode.DISPATCHED.value
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
+        mock_registration.twin_registry = mock_digital_twin_registry
         mock_repo.twin_aspect_registration_repository.create_new.return_value = mock_registration
 
         # Setup twin registry mock
@@ -789,6 +791,7 @@ class TestTwinManagementService:
         mock_registration.registration_mode = TwinsAspectRegistrationMode.DISPATCHED.value
         mock_registration.created_date = datetime.now()
         mock_registration.modified_date = datetime.now()
+        mock_registration.twin_registry = mock_digital_twin_registry
         mock_existing_aspect.twin_aspect_registrations = [mock_registration]
         
         mock_repo = Mock()
