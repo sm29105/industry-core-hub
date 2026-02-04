@@ -698,15 +698,22 @@ class TwinManagementService:
         Handle the DTR registration for the twin aspect.
         """
         dtr_provider_manager = SystemManagementService.get_dtr_manager(db_twin_aspect_registration.twin_registry)
+        connector_provider_manager = SystemManagementService.get_connector_manager(db_twin_aspect_registration.connector_control_plane)
 
         if db_twin_aspect_registration.status < TwinAspectRegistrationStatus.DTR_REGISTERED.value:               
+            href_url = f"{connector_provider_manager.connector_dataplane_hostname}{connector_provider_manager.connector_dataplane_public_path}/{submodel_id.urn}/submodel"
+            dsp_endpoint_url = f"{connector_provider_manager.connector_controlplane_hostname}{connector_provider_manager.connector_controlplane_catalog_path}"
+
+
             # Register the submodel in the DTR (if necessary)
             try:
                 dtr_provider_manager.create_submodel_descriptor(
                     aas_id=db_twin.aas_id,
                     submodel_id=db_twin_aspect.submodel_id,
                     semantic_id=db_twin_aspect.semantic_id,
-                    connector_asset_id=asset_id
+                    connector_asset_id=asset_id,
+                    dsp_endpoint_url=dsp_endpoint_url,
+                    href_url=href_url
                 )
                 # Update the registration status to DTR_REGISTERED only on success
                 db_twin_aspect_registration.status = TwinAspectRegistrationStatus.DTR_REGISTERED.value

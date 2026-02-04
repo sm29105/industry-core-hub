@@ -54,11 +54,7 @@ class DtrProviderManager:
         self,
         dtr_url: str,
         dtr_lookup_url: str,
-        api_path: str,
-        connector_controlplane_hostname: str,
-        connector_controlplane_catalog_path: str,
-        connector_dataplane_hostname: str,
-        connector_dataplane_public_path: str,
+        api_path: str
     ):
         self.dtr_url = dtr_url
         self.dtr_lookup_url = dtr_lookup_url
@@ -67,12 +63,6 @@ class DtrProviderManager:
             base_lookup_url=dtr_lookup_url,
             api_path=api_path,
         )
-
-        # TODO: remove this and inject it as parameters to methods that need it
-        self.connector_controlplane_hostname = connector_controlplane_hostname
-        self.connector_controlplane_catalog_path = connector_controlplane_catalog_path
-        self.connector_dataplane_hostname = connector_dataplane_hostname
-        self.connector_dataplane_public_path = connector_dataplane_public_path
         
     @staticmethod
     def get_dtr_url(base_dtr_url: str = '', uri: str = '', api_path: str = '') -> str:
@@ -373,6 +363,8 @@ class DtrProviderManager:
         submodel_id: UUID|str,
         semantic_id: str,
         connector_asset_id: str,
+        dsp_endpoint_url: str,
+        href_url: str
     ) -> SubModelDescriptor:
         """
         Creates a submodel descriptor in the DTR.
@@ -392,15 +384,11 @@ class DtrProviderManager:
             submodel_id = UUID(submodel_id)
         # Check that href and DSP URLs are valid
         
-        href_url = f"{self.connector_dataplane_hostname}{self.connector_dataplane_public_path}/{submodel_id.urn}/submodel"
-
         parsed_href_url = parse.urlparse(href_url)
         if not (parsed_href_url.scheme == "https" and parsed_href_url.netloc):
             raise InvalidError(f"Generated href URL is malformed: {href_url}")
 
-        dsp_endpoint_url = (
-            f"{self.connector_controlplane_hostname}{self.connector_controlplane_catalog_path}"
-        )
+
         parsed_dsp_endpoint_url = parse.urlparse(dsp_endpoint_url)
         if not (
             parsed_dsp_endpoint_url.scheme == "https" and parsed_dsp_endpoint_url.netloc
