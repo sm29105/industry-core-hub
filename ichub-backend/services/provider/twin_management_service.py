@@ -531,7 +531,7 @@ class TwinManagementService:
             )
             
             # Step 6: Handle the EDC registration
-            asset_id = self._handle_edc_registration(repo, db_connector_control_plane, db_twin_aspect_registration, db_twin_aspect)
+            asset_id = self._handle_edc_registration(repo, db_twin_aspect_registration, db_twin_aspect)
             
             # Step 7: Handle the DTR registration
             self._handle_dtr_registration(repo, db_twin_aspect_registration, db_twin, db_twin_aspect, asset_id)
@@ -606,7 +606,7 @@ class TwinManagementService:
             )
             
             # Step 7: Handle the EDC registration
-            asset_id = self._handle_edc_registration(repo, db_connector_control_plane, db_twin_aspect_registration, db_twin_aspect)
+            asset_id = self._handle_edc_registration(repo, db_twin_aspect_registration, db_twin_aspect)
             
             # Step 8: Handle the DTR registration
             self._handle_dtr_registration(repo, db_twin_aspect_registration, db_twin, db_twin_aspect, asset_id)
@@ -674,11 +674,11 @@ class TwinManagementService:
         else:
             raise NotAvailableError("Twin aspect document cannot be updated before it is stored in the submodel service.")
 
-    def _handle_edc_registration(self, repo: RepositoryManager, db_connector_control_plane: ConnectorControlPlane, db_twin_aspect_registration: TwinAspectRegistration, db_twin_aspect: TwinAspect) -> str:
+    def _handle_edc_registration(self, repo: RepositoryManager, db_twin_aspect_registration: TwinAspectRegistration, db_twin_aspect: TwinAspect) -> str:
         """
         Handle the EDC registration for the twin aspect and return the asset ID.
         """
-        connector_manager_provider = SystemManagementService.get_connector_manager(db_connector_control_plane)
+        connector_manager_provider = SystemManagementService.get_connector_manager(db_twin_aspect_registration.connector_control_plane)
 
         asset_id, usage_policy_id, access_policy_id, contract_id = connector_manager_provider.register_submodel_bundle_circular_offer(
             semantic_id=db_twin_aspect.semantic_id
