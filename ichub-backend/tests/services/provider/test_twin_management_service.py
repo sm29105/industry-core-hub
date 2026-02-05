@@ -644,6 +644,12 @@ class TestTwinManagementService:
         
         mock_repo = Mock()
         mock_repo_factory.return_value.__enter__.return_value = mock_repo
+        
+        # Setup twin with registration
+        mock_twin_registration = Mock()
+        mock_twin_registration.twin_registry_id = mock_digital_twin_registry.id
+        mock_twin.twin_registrations = [mock_twin_registration]
+        
         mock_repo.twin_repository.find_by_global_id.return_value = mock_twin
         mock_repo.twin_aspect_repository.get_by_twin_id_semantic_id.return_value = None
         
