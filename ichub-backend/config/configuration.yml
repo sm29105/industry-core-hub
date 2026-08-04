@@ -370,6 +370,7 @@ provider:
       # -- Optional custom endpoint URL (for S3-compatible services like MinIO)
       endpoint_url: "<ENDPOINT_URL>"
       # -- Authentication configuration
+      #TODO: securely manage AWS credentials, e.g., via environment variables
       auth:
         # -- Enable authentication
         enabled: false

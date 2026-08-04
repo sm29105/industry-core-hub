@@ -146,7 +146,7 @@ class SubmodelServiceManager:
             manager2 = SubmodelServiceManager()
             # Both have access to the initialized adapter
         """
-        if self._initialized:
+        if SubmodelServiceManager._initialized:
             return
         
         try:
@@ -162,7 +162,7 @@ class SubmodelServiceManager:
                 adapter_config
             )
             
-            self._initialized = True
+            SubmodelServiceManager._initialized = True
             self.logger.info(
                 f"SubmodelServiceManager initialized successfully with adapter mode: {self.adapter_mode}"
             )
@@ -250,6 +250,7 @@ class SubmodelServiceManager:
             return self.adapter.read(submodel_metadata.to_dict())
         
         elif operation == OperationType.WRITE:
+            self.logger.info(f"Writing submodel with metadata: {submodel_metadata.to_dict()}")
             self.adapter.write_json(submodel_metadata.to_dict(), payload)
             self.logger.info("Submodel uploaded successfully.")
             return None
