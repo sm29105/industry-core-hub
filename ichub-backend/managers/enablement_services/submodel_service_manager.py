@@ -22,7 +22,7 @@
 #################################################################################
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Callable
 from uuid import UUID
 from hashlib import sha256
 from enum import Enum
@@ -33,6 +33,8 @@ from tools.exceptions import InvalidError, NotFoundError
 
 from tractusx_sdk.industry.adapters import SubmodelAdapter
 from tractusx_sdk.industry.adapters.submodel_adapter_factory import SubmodelAdapterFactory
+from managers.enablement_services.adapters.adapter_config_manager import AdapterConfigurationInterface
+
 
 class OperationType(Enum):
     """Enumeration of supported submodel operations."""
@@ -98,6 +100,7 @@ class SubmodelServiceManager:
     """
     _instance = None
     _initialized = False
+    _external_adapters: Dict[str, Any] = {}  # Track registered external adapters
     logger = LoggingManager.get_logger(__name__)
     
     # def __new__(cls):
@@ -122,17 +125,36 @@ class SubmodelServiceManager:
         Implements lazy initialization to create the adapter instance only once during
         application runtime. The _initialized flag tracks whether initialization has occurred.
         
+        Architecture (Clean Separation of Concerns):
+            YAML File (configuration.yml)
+                ↓
+            ConfigManager (load + provide raw config)
+                └─ get_adapter_mode_and_config() → raw config
+                ↓
+            SubmodelServiceManager (bridge - orchestrate + transform)
+                ├─ Gets raw config from ConfigManager
+                ├─ Uses AdapterConfigurationInterface to transform via factory pattern
+                └─ Passes transformed config to SubmodelAdapterFactory.from_config()
+                ↓
+            SubmodelAdapterFactory (creates adapter from transformed config)
+                └─ from_config() builds adapter instance
+        
+        Configuration Flow:
+        1. ConfigManager.get_adapter_mode_and_config()
+           → Returns: (adapter_mode, raw_config_from_yaml)
+        
+        2. AdapterConfigurationInterface.transform_config()
+           → Transforms raw YAML config to adapter-specific format
+           → path → root_path (FileSystem)
+           → Flattens nested auth structures (HTTP Submodel, S3)
+        
+        3. SubmodelAdapterFactory.from_config()
+           → Creates adapter using transformed config
+        
         Note on Singleton Pattern:
         The singleton __new__() method is prepared but currently commented out. If enabled
         in the future, it will enforce that only one manager instance exists application-wide.
         The current lazy initialization pattern provides similar benefits for typical usage.
-        
-        Configuration flow:
-        1. On first instantiation: ConfigManager.get_adapter_mode_and_config() retrieves
-           both adapter mode and configuration from provider.submodel_dispatcher section
-        2. Passes to SubmodelAdapterFactory.from_config() → creates adapter instance
-        3. Sets instance attributes: self.adapter, self.adapter_mode
-        4. Sets _initialized flag to True, skipping reinitialize on subsequent calls
         
         Raises:
             ValueError: If configuration section is missing or invalid
@@ -150,16 +172,24 @@ class SubmodelServiceManager:
             return
         
         try:
-            # Get adapter mode and config efficiently in a single call
-            # This avoids loading the dispatcher config multiple times
-            self.adapter_mode, adapter_config = ConfigManager.get_adapter_mode_and_config(
+            # Step 1: Get raw adapter mode and config from ConfigManager
+            # ConfigManager is purely a config provider (no transformations)
+            self.adapter_mode, raw_adapter_config = ConfigManager.get_adapter_mode_and_config(
                 validate_adapter_exists=True
             )
             
-            # Initialize adapter using factory
+            # Step 2: Transform raw config using SubmodelAdapterFactory interface
+            # AdapterConfigurationInterface handles adapter-specific transformations
+            transformed_adapter_config = AdapterConfigurationInterface.transform_config(
+                self.adapter_mode,
+                raw_adapter_config
+            )
+            
+            # Step 3: Pass transformed config to factory to create adapter
+            # SubmodelAdapterFactory.from_config() builds the adapter instance
             self.adapter = SubmodelAdapterFactory.from_config(
                 self.adapter_mode,
-                adapter_config
+                transformed_adapter_config
             )
             
             SubmodelServiceManager._initialized = True
@@ -172,6 +202,165 @@ class SubmodelServiceManager:
         except Exception as e:
             self.logger.error(f"Failed to initialize SubmodelServiceManager: {e}")
             raise RuntimeError(f"Failed to initialize submodel adapter: {e}") from e
+
+    @classmethod
+    def register_external_adapter(
+        cls,
+        adapter_type: str,
+        builder_factory: Callable | None = None,
+        adapter_class: Any = None,
+        overwrite: bool = False,
+    ) -> None:
+        """
+        Register an external (custom) adapter type at runtime.
+
+        Allows dynamic registration of adapter implementations that are not built-in
+        to the SDK. Provide either a builder factory or an adapter class with a
+        ``builder()`` classmethod.
+
+        Args:
+            adapter_type: External adapter type key (e.g., "custom_adapter").
+            builder_factory: Callable that returns a configured builder instance.
+                Mutually exclusive with ``adapter_class``.
+            adapter_class: Adapter class exposing a ``builder()`` classmethod.
+                Mutually exclusive with ``builder_factory``.
+            overwrite: If True, overwrites existing registration with the same type.
+                Default: False (raises ValueError if already registered).
+
+        Raises:
+            ValueError: If neither builder_factory nor adapter_class is provided,
+                or if type already exists and overwrite=False.
+            TypeError: If builder_factory is not callable or adapter_class
+                lacks a callable ``builder()`` method.
+
+        Example:
+            Register a custom adapter class::
+
+                class MyCustomAdapter:
+                    @classmethod
+                    def builder(cls):
+                        return cls._Builder()
+
+                SubmodelServiceManager.register_external_adapter(
+                    adapter_type="my_custom",
+                    adapter_class=MyCustomAdapter,
+                )
+        """
+        # Validate that at least one parameter is provided
+        if builder_factory is None and adapter_class is None:
+            raise ValueError(
+                "Either 'builder_factory' or 'adapter_class' must be provided. "
+                "Both cannot be None."
+            )
+
+        # Validate builder_factory if provided
+        if builder_factory is not None and not callable(builder_factory):
+            raise TypeError(
+                f"'builder_factory' must be callable, got {type(builder_factory).__name__}"
+            )
+
+        # Validate adapter_class if provided
+        if adapter_class is not None:
+            if not hasattr(adapter_class, "builder"):
+                raise TypeError(
+                    f"'adapter_class' must have a 'builder' classmethod. "
+                    f"Class {adapter_class.__name__} does not have one."
+                )
+            if not callable(getattr(adapter_class, "builder")):
+                raise TypeError(
+                    f"'adapter_class.builder' must be callable. "
+                    f"Got {type(getattr(adapter_class, 'builder')).__name__}"
+                )
+
+        # Check for duplicate registration
+        if adapter_type in cls._external_adapters and not overwrite:
+            raise ValueError(
+                f"Adapter type '{adapter_type}' is already registered. "
+                f"Set overwrite=True to replace the existing registration."
+            )
+
+        try:
+            SubmodelAdapterFactory.register_adapter(
+                adapter_type=adapter_type,
+                builder_factory=builder_factory,
+                adapter_class=adapter_class,
+                overwrite=overwrite,
+            )
+            # Track in our own registry
+            cls._external_adapters[adapter_type] = {
+                "builder_factory": builder_factory,
+                "adapter_class": adapter_class,
+            }
+            cls.logger.info(
+                f"External adapter '{adapter_type}' registered successfully. "
+                f"Available external adapters: {cls.get_registered_adapters()}"
+            )
+        except (ValueError, TypeError) as e:
+            cls.logger.error(f"Failed to register external adapter '{adapter_type}': {e}")
+            raise
+
+    @classmethod
+    def get_registered_adapters(cls) -> list[str]:
+        """
+        Get list of externally registered (custom) adapter types.
+
+        This method returns only adapters registered at runtime via
+        ``register_external_adapter()``. Built-in adapters (FileSystem, S3,
+        HttpSubmodel) are intentionally excluded.
+
+        Returns:
+            Sorted list of registered external adapter type keys.
+
+        Example:
+            Inspect runtime registrations::
+
+                external = SubmodelServiceManager.get_registered_adapters()
+                # Returns: ['my_custom', 'another_adapter']
+        """
+        # Return from our own registry (most reliable)
+        adapters = sorted(list(cls._external_adapters.keys()))
+        cls.logger.debug(f"Registered external adapter types: {adapters}")
+        return adapters
+
+    @classmethod
+    def unregister_external_adapter(cls, adapter_type: str) -> None:
+        """
+        Unregister a previously registered external adapter type.
+
+        Removes a custom adapter from the runtime registry. Built-in adapters
+        cannot be unregistered.
+
+        Args:
+            adapter_type: External adapter type key to unregister.
+
+        Raises:
+            ValueError: If adapter_type is not registered or is a built-in adapter.
+
+        Example:
+            Remove a custom adapter::
+
+                SubmodelServiceManager.unregister_external_adapter("my_custom")
+        """
+        # Check if adapter is registered (in our registry)
+        if adapter_type not in cls._external_adapters:
+            raise ValueError(
+                f"Adapter type '{adapter_type}' is not registered or does not exist. "
+                f"Cannot unregister a non-existent adapter. "
+                f"Available registered adapters: {cls.get_registered_adapters()}"
+            )
+
+        try:
+            SubmodelAdapterFactory.unregister_adapter(adapter_type=adapter_type)
+            # Remove from our registry
+            del cls._external_adapters[adapter_type]
+            cls.logger.info(
+                f"External adapter '{adapter_type}' unregistered successfully. "
+                f"Remaining registered adapters: {cls.get_registered_adapters()}"
+            )
+        except Exception as e:
+            cls.logger.error(f"Failed to unregister external adapter '{adapter_type}': {e}")
+            raise
+
     def _validate_uuid(self, value: Any) -> UUID:
         """Validate and convert value to UUID.
         

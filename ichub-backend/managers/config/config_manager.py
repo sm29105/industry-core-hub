@@ -22,6 +22,7 @@
 
 from managers.config.log_manager import LoggingManager
 
+
 import os
 import yaml
 from typing import Any, Callable, Dict
@@ -109,7 +110,6 @@ class ConfigManager:
     """
     
     _raw_config: Dict[str, Any] | None = None
-    _external_adapters: Dict[str, Any] = {}  # Track registered external adapters
 
     @classmethod
     def load_config(cls, config_path: str | None = None) -> Dict[str, Any]:
@@ -281,7 +281,7 @@ class ConfigManager:
         Get list of all available adapter types from SubmodelAdapterFactory.
         
         Combines built-in adapters (FileSystem, S3, HttpSubmodel) and any
-        externally registered adapters at runtime.
+        externally registered adapters at runtime via SubmodelServiceManager.
         
         Returns:
             Sorted list of available adapter type keys (lowercase with underscores)
@@ -292,8 +292,10 @@ class ConfigManager:
         """
         try:
             adapters = SubmodelAdapterFactory.get_available_adapter_types()
-            # Also include registered external adapters
-            registered = cls.get_registered_adapters()
+            # Also include registered external adapters from SubmodelServiceManager
+            # Import here to avoid circular dependency at module level
+            from managers.enablement_services.submodel_service_manager import SubmodelServiceManager
+            registered = SubmodelServiceManager.get_registered_adapters()
             combined = list(set(adapters) | set(registered))
             combined.sort()
             logger.debug(f"Available adapter types: {combined}")
@@ -303,206 +305,52 @@ class ConfigManager:
             # Fallback to known built-in adapters if factory fails
             return ["file_system", "http_submodel", "s3"]
 
-    #TODO: Consider if this method is needed for the future ?
-    @classmethod
-    def register_external_adapter(
-        cls,
-        adapter_type: str,
-        builder_factory: Callable | None = None,
-        adapter_class: Any = None,
-        overwrite: bool = False,
-    ) -> None:
-        """
-        Register an external (custom) adapter type at runtime.
-        
-        Allows dynamic registration of adapter implementations that are not built-in
-        to the SDK. Provide either a builder factory or an adapter class with a
-        ``builder()`` classmethod.
-        
-        Args:
-            adapter_type: External adapter type key (e.g., "custom_adapter").
-            builder_factory: Callable that returns a configured builder instance.
-                Mutually exclusive with ``adapter_class``.
-            adapter_class: Adapter class exposing a ``builder()`` classmethod.
-                Mutually exclusive with ``builder_factory``.
-            overwrite: If True, overwrites existing registration with the same type.
-                Default: False (raises ValueError if already registered).
-        
-        Raises:
-            ValueError: If neither builder_factory nor adapter_class is provided,
-                or if type already exists and overwrite=False.
-            TypeError: If builder_factory is not callable or adapter_class
-                lacks a callable ``builder()`` method.
-        
-        Example:
-            Register a custom adapter class::
-            
-                class MyCustomAdapter:
-                    @classmethod
-                    def builder(cls):
-                        return cls._Builder()
-                
-                ConfigManager.register_external_adapter(
-                    adapter_type="my_custom",
-                    adapter_class=MyCustomAdapter,
-                )
-        """
-        # Validate that at least one parameter is provided
-        if builder_factory is None and adapter_class is None:
-            raise ValueError(
-                "Either 'builder_factory' or 'adapter_class' must be provided. "
-                "Both cannot be None."
-            )
-        
-        # Validate builder_factory if provided
-        if builder_factory is not None and not callable(builder_factory):
-            raise TypeError(
-                f"'builder_factory' must be callable, got {type(builder_factory).__name__}"
-            )
-        
-        # Validate adapter_class if provided
-        if adapter_class is not None:
-            if not hasattr(adapter_class, "builder"):
-                raise TypeError(
-                    f"'adapter_class' must have a 'builder' classmethod. "
-                    f"Class {adapter_class.__name__} does not have one."
-                )
-            if not callable(getattr(adapter_class, "builder")):
-                raise TypeError(
-                    f"'adapter_class.builder' must be callable. "
-                    f"Got {type(getattr(adapter_class, 'builder')).__name__}"
-                )
-        
-        # Check for duplicate registration
-        if adapter_type in cls._external_adapters and not overwrite:
-            raise ValueError(
-                f"Adapter type '{adapter_type}' is already registered. "
-                f"Set overwrite=True to replace the existing registration."
-            )
-        
-        try:
-            SubmodelAdapterFactory.register_adapter(
-                adapter_type=adapter_type,
-                builder_factory=builder_factory,
-                adapter_class=adapter_class,
-                overwrite=overwrite,
-            )
-            # Track in our own registry
-            cls._external_adapters[adapter_type] = {
-                "builder_factory": builder_factory,
-                "adapter_class": adapter_class,
-            }
-            logger.info(
-                f"External adapter '{adapter_type}' registered successfully. "
-                f"Available adapters: {cls.get_available_adapters()}"
-            )
-        except (ValueError, TypeError) as e:
-            logger.error(f"Failed to register external adapter '{adapter_type}': {e}")
-            raise
-        
-    #TODO: Consider if this method is needed for the future ?
-    @classmethod
-    def get_registered_adapters(cls) -> list[str]:
-        """
-        Get list of externally registered (custom) adapter types.
-        
-        This method returns only adapters registered at runtime via
-        ``register_external_adapter()``. Built-in adapters (FileSystem, S3,
-        HttpSubmodel) are intentionally excluded.
-        
-        Returns:
-            Sorted list of registered external adapter type keys.
-        
-        Example:
-            Inspect runtime registrations::
-            
-                external = ConfigManager.get_registered_adapters()
-                # Returns: ['my_custom', 'another_adapter']
-        """
-        # Return from our own registry (most reliable)
-        adapters = sorted(list(cls._external_adapters.keys()))
-        logger.debug(f"Registered external adapter types: {adapters}")
-        return adapters
 
-    #TODO: Consider if this method is needed for the future ?
-    @classmethod
-    def unregister_external_adapter(cls, adapter_type: str) -> None:
-        """
-        Unregister a previously registered external adapter type.
-        
-        Removes a custom adapter from the runtime registry. Built-in adapters
-        cannot be unregistered.
-        
-        Args:
-            adapter_type: External adapter type key to unregister.
-        
-        Raises:
-            ValueError: If adapter_type is not registered or is a built-in adapter.
-        
-        Example:
-            Remove a custom adapter::
-            
-                ConfigManager.unregister_external_adapter("my_custom")
-        """
-        # Check if adapter is registered (in our registry)
-        if adapter_type not in cls._external_adapters:
-            raise ValueError(
-                f"Adapter type '{adapter_type}' is not registered or does not exist. "
-                f"Cannot unregister a non-existent adapter. "
-                f"Available registered adapters: {cls.get_registered_adapters()}"
-            )
-        
-        try:
-            SubmodelAdapterFactory.unregister_adapter(adapter_type=adapter_type)
-            # Remove from our registry
-            del cls._external_adapters[adapter_type]
-            logger.info(
-                f"External adapter '{adapter_type}' unregistered successfully. "
-                f"Remaining registered adapters: {cls.get_registered_adapters()}"
-            )
-        except Exception as e:
-            logger.error(f"Failed to unregister external adapter '{adapter_type}': {e}")
-            raise
 
     @classmethod
     def get_adapter_mode_and_config(
         cls,
         dispatcher_path: str = "provider.submodel_dispatcher",
-        validate_adapter_exists: bool = True,
-        validate_schema: bool = False
+        validate_adapter_exists: bool = True
     ) -> tuple[str, Dict[str, Any]]:
         """
-        Get adapter mode and configuration in a single call.
+        Get adapter mode and raw configuration from YAML in a single call.
         
-        This method efficiently retrieves both the adapter mode and its complete
-        configuration without loading the dispatcher config twice. Ideal for factory
-        initialization patterns where both values are needed.
+        This method retrieves both the adapter mode and its complete raw configuration
+        without loading the dispatcher config twice. ConfigManager is purely a provider
+        of configuration—it does not perform any transformations. Transformations are
+        handled by SubmodelAdapterFactory.from_config().
         
-        Configuration structure:
+        Configuration structure (from YAML):
             provider:
               submodel_dispatcher:
                 mode: "file_system"              # <- Adapter type
-                file_system:                     # <- Adapter-specific config
-                  path: "..."
+                file_system:                     # <- Raw adapter-specific config
+                  path: "..."                    # <- Factory will transform to root_path
                   path_pattern: "..."
                 http_submodel:
                   base_url: "..."
+                  auth:                          # <- Factory will flatten this
+                    token: "..."
                 s3:
                   bucket_name: "..."
+                  auth:                          # <- Factory will flatten this
+                    aws_access_key_id: "..."
         
         Args:
             dispatcher_path: Dot-notation path to dispatcher config section
             validate_adapter_exists: Whether to validate adapter is available in factory (default: True)
-            validate_schema: Whether to validate adapter config against Pydantic schema (default: False)
         
         Returns:
-            Tuple of (adapter_mode, adapter_config_dict)
+            Tuple of (adapter_mode, raw_adapter_config_dict)
+            Note: adapter_config is raw from YAML; factory handles transformations
         
         Raises:
-            ValueError: If dispatcher config not found, mode invalid, adapter not supported, or schema invalid
+            ValueError: If dispatcher config not found, mode invalid, or adapter not supported
         
         Example:
             mode, config = ConfigManager.get_adapter_mode_and_config()
+            # config is raw from YAML - pass directly to factory
             adapter = SubmodelAdapterFactory.from_config(mode, config)
         """
         # Get dispatcher configuration once
@@ -533,7 +381,8 @@ class ConfigManager:
                     f"Supported adapters: {', '.join(sorted(available))}"
                 )
         
-        # Get adapter-specific config from dispatcher using the mode as the section key
+        # Get raw adapter-specific config from dispatcher using the mode as the section key
+        # This is returned as-is from YAML; factory handles all transformations
         adapter_config = dispatcher_config.get(normalized_mode)
         if not adapter_config or not isinstance(adapter_config, dict):
             raise ValueError(
@@ -541,48 +390,8 @@ class ConfigManager:
                 f"Expected configuration under '{dispatcher_path}.{normalized_mode}' as a dictionary."
             )
         
-        # Create a copy to avoid modifying the original config
-        adapter_config = adapter_config.copy()
-        
-        # Transform adapter-specific field names to match SubmodelAdapterFactory expectations
-        if normalized_mode == "file_system" and "path" in adapter_config:
-            # FileSystem adapter expects "root_path" instead of "path"
-            adapter_config["root_path"] = adapter_config.pop("path")
-            logger.debug("Transformed 'path' field to 'root_path' for FileSystem adapter")
-        
-        elif normalized_mode == "http_submodel" and "auth" in adapter_config:
-            # HTTP Submodel adapter expects flattened auth fields (only token and key_name)
-            auth_config = adapter_config.pop("auth")
-            if isinstance(auth_config, dict):
-                # Flatten only the fields the factory accepts
-                if "token" in auth_config:
-                    adapter_config["auth_token"] = auth_config["token"]
-                if "key_name" in auth_config:
-                    adapter_config["auth_key_name"] = auth_config["key_name"]
-                logger.debug("Flattened 'auth' structure to 'auth_token' and 'auth_key_name' for HTTP Submodel adapter")
-        
-        elif normalized_mode == "s3" and "auth" in adapter_config:
-            # S3 adapter expects flattened auth fields (aws_access_key_id, aws_secret_access_key)
-            auth_config = adapter_config.pop("auth")
-            if isinstance(auth_config, dict):
-                # Flatten only the fields the factory accepts
-                if "aws_access_key_id" in auth_config:
-                    adapter_config["aws_access_key_id"] = auth_config["aws_access_key_id"]
-                if "aws_secret_access_key" in auth_config:
-                    adapter_config["aws_secret_access_key"] = auth_config["aws_secret_access_key"]
-                logger.debug("Flattened 'auth' structure to 'aws_access_key_id' and 'aws_secret_access_key' for S3 adapter")
-        
-        # Validate schema if requested
-        if validate_schema:
-            try:
-                SubmodelAdapterConfig(**adapter_config)
-                logger.debug(f"Adapter config passed schema validation for '{normalized_mode}'")
-            except ValidationError as e:
-                raise ValueError(
-                    f"Adapter configuration for '{normalized_mode}' failed schema validation: {e}"
-                ) from e
-        
-        logger.debug(f"Retrieved adapter mode '{normalized_mode}' and configuration")
+        logger.debug(
+            f"Retrieved raw adapter mode '{normalized_mode}' and configuration from YAML. "
+            f"SubmodelAdapterFactory.from_config() will handle transformations."
+        )
         return normalized_mode, adapter_config
-
-
