@@ -25,25 +25,10 @@ from managers.config.log_manager import LoggingManager
 
 import os
 import yaml
-from typing import Any, Callable, Dict
-from pydantic import BaseModel, ValidationError
+from typing import Any, Dict
 from tractusx_sdk.industry.adapters.submodel_adapter_factory import SubmodelAdapterFactory
 
 logger = LoggingManager.get_logger(__name__)
-
-
-class SubmodelAdapterConfig(BaseModel):
-    """
-    Pydantic schema for validating submodel adapter configuration.
-    
-    This is a base schema that can be extended for specific adapter types
-    (FileSystem, S3, HttpSubmodel) with adapter-specific validation rules.
-    
-    Attributes:
-        All fields are optional to support various adapter configurations.
-    """
-    class Config:
-        extra = "allow"  # Allow additional fields for adapter-specific settings
 
 
 class ConfigManager:
@@ -57,7 +42,6 @@ class ConfigManager:
     - Loads configuration from YAML files at startup (e.g., config/configuration.yml)
     - Supports dot-notation for nested key access (backward compatible with old patterns)
     - Section-based retrieval for factory-pattern usage (new, flexible approach)
-    - Runtime registration of configuration sections and overrides
     - Optional Pydantic schema validation for type safety
     - Full logging for debugging and auditability
     
@@ -116,9 +100,8 @@ class ConfigManager:
         """
         Load the configuration from a YAML file. Should be called once at startup.
         
-        If the configuration is already loaded, this method returns the cached configuration
-        without reloading. If the file is not found or fails to parse, an empty dictionary
-        is set and logged as a warning/error.
+        This method is intended to run once during application startup. Subsequent calls
+        return the cached configuration without reloading.
         
         Args:
             config_path: Path to YAML configuration file. Defaults to ./config/configuration.yml
@@ -130,23 +113,25 @@ class ConfigManager:
         Note:
             - Repeated calls return the cached configuration
             - File not found or YAML parse errors do not raise exceptions, but log warnings
-            - The configuration is stored in cls._raw_config for reuse by other methods
+            - Other configuration methods require this method to have completed first
         """
         if cls._raw_config is not None:
-            logger.debug("Configuration already loaded, skipping reload")
             return cls._raw_config
 
         if config_path is None:
             config_path = os.path.join(os.getcwd(), "config", "configuration.yml")
 
         try:
-            with open(config_path, "r") as f:
-                cls._raw_config = yaml.safe_load(f) or {}
+            with open(config_path, "r", encoding="utf-8") as config_file:
+                loaded_config = yaml.safe_load(config_file) or {}
+                if not isinstance(loaded_config, dict):
+                    raise ValueError("The root configuration value must be a mapping")
+                cls._raw_config = loaded_config
                 logger.info(f"Configuration loaded successfully from {config_path}")
         except FileNotFoundError as e:
             logger.warning(f"Configuration file not found at '{config_path}': {e}")
             cls._raw_config = {}
-        except Exception as e:
+        except (OSError, ValueError, yaml.YAMLError) as e:
             logger.error(f"Failed to load config from '{config_path}': {e}")
             cls._raw_config = {}
 
@@ -176,14 +161,15 @@ class ConfigManager:
             dispatcher_config = ConfigManager.get_section("provider.submodel_dispatcher")
         """
         if cls._raw_config is None:
-            cls.load_config()
-        
-        # Navigate through YAML config using dot notation
+            raise RuntimeError(
+                "Configuration must be loaded with ConfigManager.load_config() before access"
+            )
+
         config_data = cls._navigate_config(section_path)
         if config_data is None:
-            config_data = default or {}
+            config_data = {} if default is None else default
             logger.debug(f"Config section '{section_path}' not found, using default")
-        
+
         return config_data
 
     @classmethod
@@ -209,7 +195,7 @@ class ConfigManager:
             final value is not a dictionary.
         """
         keys = section_path.split(".")
-        value = cls._raw_config
+        value: Any = cls._raw_config
         
         for key in keys:
             if not isinstance(value, dict) or key not in value:
@@ -250,29 +236,38 @@ class ConfigManager:
             mode = ConfigManager.get("provider.submodel_dispatcher.mode", default="file_system")
         """
         if cls._raw_config is None:
-            cls.load_config()
-        
+            raise RuntimeError(
+                "Configuration must be loaded with ConfigManager.load_config() before access"
+            )
+
         keys = key.split(".")
-        value = cls._raw_config
-        
-        for k in keys:
-            if not isinstance(value, dict) or k not in value:
+        value: Any = cls._raw_config
+
+        for config_key in keys:
+            if not isinstance(value, dict) or config_key not in value:
                 return default
-            value = value[k]
-        
+            value = value[config_key]
+
         return value
 
     @classmethod
-    def get_config(cls) -> Dict[str, Any]:
+    def get_config(cls, key: str | None = None, default: Any = None) -> Any:
         """
-        Get entire configuration dictionary.
+        Get the entire configuration or a value using dot notation.
+
+        The keyed form is retained for compatibility with existing backend callers.
         
         Returns:
-            Complete configuration as a copy
+            Complete configuration, or the requested value
         """
+        if key is not None:
+            return cls.get(key, default)
+
         if cls._raw_config is None:
-            cls.load_config()
-        return cls._raw_config.copy()
+            raise RuntimeError(
+                "Configuration must be loaded with ConfigManager.load_config() before access"
+            )
+        return cls._raw_config
 
 
     @classmethod
@@ -290,20 +285,9 @@ class ConfigManager:
             available = ConfigManager.get_available_adapters()
             # Returns: ['file_system', 'http_submodel', 's3', ...]
         """
-        try:
-            adapters = SubmodelAdapterFactory.get_available_adapter_types()
-            # Also include registered external adapters from SubmodelServiceManager
-            # Import here to avoid circular dependency at module level
-            from managers.enablement_services.submodel_service_manager import SubmodelServiceManager
-            registered = SubmodelServiceManager.get_registered_adapters()
-            combined = list(set(adapters) | set(registered))
-            combined.sort()
-            logger.debug(f"Available adapter types: {combined}")
-            return combined
-        except Exception as e:
-            logger.error(f"Failed to retrieve available adapters from factory: {e}")
-            # Fallback to known built-in adapters if factory fails
-            return ["file_system", "http_submodel", "s3"]
+        adapters = sorted(SubmodelAdapterFactory.get_available_adapter_types())
+        logger.debug(f"Available adapter types: {adapters}")
+        return adapters
 
 
 
@@ -316,26 +300,24 @@ class ConfigManager:
         """
         Get adapter mode and raw configuration from YAML in a single call.
         
-        This method retrieves both the adapter mode and its complete raw configuration
-        without loading the dispatcher config twice. ConfigManager is purely a provider
-        of configuration—it does not perform any transformations. Transformations are
-        handled by SubmodelAdapterFactory.from_config().
+        This method retrieves both the adapter mode and its complete raw YAML
+        configuration without loading the dispatcher config twice. The raw
+        configuration is transformed by AdapterConfigurationInterface before it
+        is passed to SubmodelAdapterFactory.from_config().
         
         Configuration structure (from YAML):
             provider:
               submodel_dispatcher:
                 mode: "file_system"              # <- Adapter type
                 file_system:                     # <- Raw adapter-specific config
-                  path: "..."                    # <- Factory will transform to root_path
+                  root_path: "..."                 # <- FileSystem builder key
                   path_pattern: "..."
                 http_submodel:
                   base_url: "..."
-                  auth:                          # <- Factory will flatten this
-                    token: "..."
+                                    auth_token: "..."              # <- HTTP builder key
                 s3:
                   bucket_name: "..."
-                  auth:                          # <- Factory will flatten this
-                    aws_access_key_id: "..."
+                                    aws_access_key_id: "..."       # <- S3 builder key
         
         Args:
             dispatcher_path: Dot-notation path to dispatcher config section
@@ -343,14 +325,15 @@ class ConfigManager:
         
         Returns:
             Tuple of (adapter_mode, raw_adapter_config_dict)
-            Note: adapter_config is raw from YAML; factory handles transformations
+            Note: adapter_config is raw from YAML; the service transformation layer
+            maps it to the factory builder API.
         
         Raises:
             ValueError: If dispatcher config not found, mode invalid, or adapter not supported
         
         Example:
             mode, config = ConfigManager.get_adapter_mode_and_config()
-            # config is raw from YAML - pass directly to factory
+            # config is raw from YAML - the service manager maps it before the factory call
             adapter = SubmodelAdapterFactory.from_config(mode, config)
         """
         # Get dispatcher configuration once
@@ -368,9 +351,14 @@ class ConfigManager:
                 f"No adapter mode specified in '{dispatcher_path}.mode'. "
                 f"Please specify a 'mode' field in your configuration."
             )
+
+        if not isinstance(adapter_mode, str):
+            raise ValueError(
+                f"Adapter mode must be a string, got {type(adapter_mode).__name__}."
+            )
         
         # Normalize mode to lowercase with underscores (e.g., "FileSystem" -> "file_system")
-        normalized_mode = adapter_mode.lower().replace(" ", "_")
+        normalized_mode = adapter_mode.strip().lower().replace(" ", "_").replace("-", "_")
         
         # Validate adapter exists in factory if requested
         if validate_adapter_exists:
@@ -381,17 +369,16 @@ class ConfigManager:
                     f"Supported adapters: {', '.join(sorted(available))}"
                 )
         
-        # Get raw adapter-specific config from dispatcher using the mode as the section key
-        # This is returned as-is from YAML; factory handles all transformations
+        # Get the selected adapter section using the normalized mode as its key.
+        # The section is passed through to the factory without backend mappings.
         adapter_config = dispatcher_config.get(normalized_mode)
-        if not adapter_config or not isinstance(adapter_config, dict):
+        if not isinstance(adapter_config, dict):
             raise ValueError(
                 f"Missing or invalid configuration for adapter '{normalized_mode}'. "
                 f"Expected configuration under '{dispatcher_path}.{normalized_mode}' as a dictionary."
             )
         
         logger.debug(
-            f"Retrieved raw adapter mode '{normalized_mode}' and configuration from YAML. "
-            f"SubmodelAdapterFactory.from_config() will handle transformations."
+            f"Retrieved adapter mode '{normalized_mode}' and its configuration keys from YAML."
         )
         return normalized_mode, adapter_config

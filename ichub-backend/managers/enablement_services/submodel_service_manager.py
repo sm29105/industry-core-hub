@@ -21,19 +21,18 @@
 # SPDX-License-Identifier: Apache-2.0
 #################################################################################
 
+import json
 from dataclasses import dataclass
 from typing import Dict, Any, Callable
 from uuid import UUID
 from hashlib import sha256
 from enum import Enum
 
-from managers.config.config_manager import ConfigManager
 from managers.config.log_manager import LoggingManager
 from tools.exceptions import InvalidError, NotFoundError
 
-from tractusx_sdk.industry.adapters import SubmodelAdapter
 from tractusx_sdk.industry.adapters.submodel_adapter_factory import SubmodelAdapterFactory
-from managers.enablement_services.adapters.adapter_config_manager import AdapterConfigurationInterface
+from managers.enablement_services.adapters.adapter_config_manager import SubmodelAdapterProvider
 
 
 class OperationType(Enum):
@@ -74,17 +73,12 @@ class SubmodelServiceManager:
     """
     Manager for handling submodel service operations (read, write, delete).
     
-    Uses lazy initialization to ensure efficient adapter creation and configuration.
-    Features 100% dynamic adapter initialization based on configuration via SubmodelAdapterFactory.
+    Creates one adapter per manager instance from the configured dispatcher section.
+    Adapter initialization is dynamic and delegated to SubmodelAdapterFactory.
     Supports multiple storage backends:
     - FileSystem (local storage)
     - S3 (AWS S3 or S3-compatible)
     - HttpSubmodel (external submodel service)
-    
-    Singleton Pattern Infrastructure:
-    The singleton pattern infrastructure (__new__ method) is prepared but not currently enforced.
-    This allows flexibility for potential future use. Currently, lazy initialization via __init__
-    is used to initialize the adapter only once per application runtime.
     
     Configuration is loaded from YAML and passed to the factory without any hardcoded logic
     or switch statements. Adapter type and configuration are determined dynamically from
@@ -94,36 +88,25 @@ class SubmodelServiceManager:
         # Initialize adapter from configuration
         manager = SubmodelServiceManager()
         
-        # Subsequent instantiations initialize the same way (due to lazy initialization)
+        # A manager built from the same dispatcher section reuses the cached adapter.
         manager2 = SubmodelServiceManager()
-        # Both reference the same initialized adapter instance
+        # A manager pointed at a different dispatcher section builds/caches its own adapter.
+        manager3 = SubmodelServiceManager("provider.secondary_dispatcher")
     """
-    _instance = None
-    _initialized = False
-    _external_adapters: Dict[str, Any] = {}  # Track registered external adapters
     logger = LoggingManager.get_logger(__name__)
-    
-    # def __new__(cls):
-    #     """
-    #     Implement singleton pattern to ensure only one adapter instance exists.
-        
-    #     Creates a single instance on first instantiation and initializes the _initialized
-    #     flag for lazy initialization. Subsequent calls return the existing instance.
-        
-    #     Returns:
-    #         Singleton instance of SubmodelServiceManager.
-    #     """
-    #     if cls._instance is None:
-    #         cls._instance = super().__new__(cls)
-    #         cls._instance._initialized = False
-    #     return cls._instance
 
-    def __init__(self):
+    # Adapter instances are cached per resolved source so repeated instantiations
+    # (e.g. one per request) reuse the same adapter instead of rebuilding it.
+    _adapter_cache: Dict[str, Any] = {}
+
+    def __init__(
+        self,
+        dispatcher_path: str = "provider.submodel_dispatcher",
+        adapter_type: str | None = None,
+        adapter_config: Dict[str, Any] | None = None,
+    ):
         """
-        Initialize SubmodelServiceManager with lazy initialization pattern.
-        
-        Implements lazy initialization to create the adapter instance only once during
-        application runtime. The _initialized flag tracks whether initialization has occurred.
+        Initialize a manager with an adapter selected from the given configuration section.
         
         Architecture (Clean Separation of Concerns):
             YAML File (configuration.yml)
@@ -131,77 +114,91 @@ class SubmodelServiceManager:
             ConfigManager (load + provide raw config)
                 └─ get_adapter_mode_and_config() → raw config
                 ↓
-            SubmodelServiceManager (bridge - orchestrate + transform)
-                ├─ Gets raw config from ConfigManager
-                ├─ Uses AdapterConfigurationInterface to transform via factory pattern
-                └─ Passes transformed config to SubmodelAdapterFactory.from_config()
-                ↓
-            SubmodelAdapterFactory (creates adapter from transformed config)
-                └─ from_config() builds adapter instance
+            SubmodelServiceManager (bridge - orchestrate)
+                └─ SubmodelAdapterProvider loads and builds the configured adapter
+                    ↓
+                SubmodelAdapterFactory (creates adapter from builder-compatible config)
+                    └─ from_config() builds adapter instance
         
         Configuration Flow:
-        1. ConfigManager.get_adapter_mode_and_config()
-           → Returns: (adapter_mode, raw_config_from_yaml)
-        
-        2. AdapterConfigurationInterface.transform_config()
-           → Transforms raw YAML config to adapter-specific format
-           → path → root_path (FileSystem)
-           → Flattens nested auth structures (HTTP Submodel, S3)
-        
-        3. SubmodelAdapterFactory.from_config()
-           → Creates adapter using transformed config
-        
-        Note on Singleton Pattern:
-        The singleton __new__() method is prepared but currently commented out. If enabled
-        in the future, it will enforce that only one manager instance exists application-wide.
-        The current lazy initialization pattern provides similar benefits for typical usage.
+          Adapter creation is delegated to SubmodelAdapterProvider so this manager
+          does not depend on the YAML schema or adapter-specific mappings.
         
         Raises:
             ValueError: If configuration section is missing or invalid
             RuntimeError: If adapter initialization fails
         
         Example:
-            # First instantiation initializes adapter from configuration
+            # First instantiation builds and caches the adapter
             manager = SubmodelServiceManager()
             
-            # Subsequent instantiations skip initialization (lazy pattern)
+            # Reuses the cached adapter, keyed by dispatcher_path
             manager2 = SubmodelServiceManager()
-            # Both have access to the initialized adapter
+            
+            # Different dispatcher path builds/caches a separate adapter
+            manager3 = SubmodelServiceManager("provider.secondary_dispatcher")
         """
-        if SubmodelServiceManager._initialized:
-            return
-        
         try:
-            # Step 1: Get raw adapter mode and config from ConfigManager
-            # ConfigManager is purely a config provider (no transformations)
-            self.adapter_mode, raw_adapter_config = ConfigManager.get_adapter_mode_and_config(
-                validate_adapter_exists=True
-            )
-            
-            # Step 2: Transform raw config using SubmodelAdapterFactory interface
-            # AdapterConfigurationInterface handles adapter-specific transformations
-            transformed_adapter_config = AdapterConfigurationInterface.transform_config(
-                self.adapter_mode,
-                raw_adapter_config
-            )
-            
-            # Step 3: Pass transformed config to factory to create adapter
-            # SubmodelAdapterFactory.from_config() builds the adapter instance
-            self.adapter = SubmodelAdapterFactory.from_config(
-                self.adapter_mode,
-                transformed_adapter_config
-            )
-            
-            SubmodelServiceManager._initialized = True
-            self.logger.info(
-                f"SubmodelServiceManager initialized successfully with adapter mode: {self.adapter_mode}"
-            )
+            self.adapter = self._resolve_adapter(dispatcher_path, adapter_type, adapter_config)
         except ValueError as e:
             self.logger.error(f"Configuration error during initialization: {e}")
             raise
         except Exception as e:
             self.logger.error(f"Failed to initialize SubmodelServiceManager: {e}")
             raise RuntimeError(f"Failed to initialize submodel adapter: {e}") from e
+
+    def _resolve_adapter(
+        self,
+        dispatcher_path: str,
+        adapter_type: str | None,
+        adapter_config: Dict[str, Any] | None,
+    ) -> Any:
+        """Resolve an adapter for the given source, reusing a cached instance if available."""
+        if adapter_type is not None or adapter_config is not None:
+            if adapter_type is None or adapter_config is None:
+                raise ValueError(
+                    "Both adapter_type and adapter_config are required for "
+                    "frontend-configured adapters"
+                )
+            cache_key = self._build_cache_key(adapter_type, adapter_config)
+            source = f"frontend adapter '{adapter_type}'"
+        else:
+            cache_key = f"dispatcher:{dispatcher_path}"
+            source = f"dispatcher '{dispatcher_path}'"
+
+        if cache_key in self._adapter_cache:
+            self.logger.info(f"Reusing cached adapter for {source}")
+            return self._adapter_cache[cache_key]
+
+        # Provider resolves the source internally; manager stays source-agnostic.
+        adapter = SubmodelAdapterProvider.create_adapter(
+            dispatcher_path=dispatcher_path,
+            adapter_type=adapter_type,
+            adapter_config=adapter_config,
+        )
+        self._adapter_cache[cache_key] = adapter
+        self.logger.info(f"SubmodelServiceManager initialized from {source}")
+        return adapter
+
+    @staticmethod
+    def _build_cache_key(adapter_type: str, adapter_config: Dict[str, Any]) -> str:
+        """Build a stable cache key for a frontend-supplied adapter configuration."""
+        try:
+            config_signature = json.dumps(adapter_config, sort_keys=True, default=str)
+        except TypeError:
+            config_signature = repr(sorted(adapter_config.items(), key=str))
+        return f"frontend:{adapter_type}:{config_signature}"
+
+    @classmethod
+    def clear_adapter_cache(cls) -> None:
+        """
+        Clear all cached adapter instances.
+        
+        Use after reloading configuration or between test cases so the next
+        manager instantiation rebuilds adapters from the current configuration.
+        """
+        cls._adapter_cache.clear()
+        cls.logger.info("Submodel adapter cache cleared")
 
     @classmethod
     def register_external_adapter(
@@ -272,13 +269,6 @@ class SubmodelServiceManager:
                     f"Got {type(getattr(adapter_class, 'builder')).__name__}"
                 )
 
-        # Check for duplicate registration
-        if adapter_type in cls._external_adapters and not overwrite:
-            raise ValueError(
-                f"Adapter type '{adapter_type}' is already registered. "
-                f"Set overwrite=True to replace the existing registration."
-            )
-
         try:
             SubmodelAdapterFactory.register_adapter(
                 adapter_type=adapter_type,
@@ -286,11 +276,6 @@ class SubmodelServiceManager:
                 adapter_class=adapter_class,
                 overwrite=overwrite,
             )
-            # Track in our own registry
-            cls._external_adapters[adapter_type] = {
-                "builder_factory": builder_factory,
-                "adapter_class": adapter_class,
-            }
             cls.logger.info(
                 f"External adapter '{adapter_type}' registered successfully. "
                 f"Available external adapters: {cls.get_registered_adapters()}"
@@ -317,8 +302,11 @@ class SubmodelServiceManager:
                 external = SubmodelServiceManager.get_registered_adapters()
                 # Returns: ['my_custom', 'another_adapter']
         """
-        # Return from our own registry (most reliable)
-        adapters = sorted(list(cls._external_adapters.keys()))
+        built_in_adapters = {"file_system", "http_submodel", "s3"}
+        adapters = sorted(
+            set(SubmodelAdapterFactory.get_available_adapter_types())
+            - built_in_adapters
+        )
         cls.logger.debug(f"Registered external adapter types: {adapters}")
         return adapters
 
@@ -341,18 +329,8 @@ class SubmodelServiceManager:
 
                 SubmodelServiceManager.unregister_external_adapter("my_custom")
         """
-        # Check if adapter is registered (in our registry)
-        if adapter_type not in cls._external_adapters:
-            raise ValueError(
-                f"Adapter type '{adapter_type}' is not registered or does not exist. "
-                f"Cannot unregister a non-existent adapter. "
-                f"Available registered adapters: {cls.get_registered_adapters()}"
-            )
-
         try:
             SubmodelAdapterFactory.unregister_adapter(adapter_type=adapter_type)
-            # Remove from our registry
-            del cls._external_adapters[adapter_type]
             cls.logger.info(
                 f"External adapter '{adapter_type}' unregistered successfully. "
                 f"Remaining registered adapters: {cls.get_registered_adapters()}"
@@ -431,26 +409,33 @@ class SubmodelServiceManager:
             semantic_id=semantic_id,
             semantic_id_hash=self._hash_semantic_id(semantic_id),
         )
-        
-        if operation == OperationType.READ:
-            if not self.adapter.exists(submodel_metadata.to_dict()):
-                self.logger.error(f"Submodel file not found: {submodel_metadata}")
-                raise NotFoundError(f"Submodel file not found: {submodel_metadata}")
-            return self.adapter.read(submodel_metadata.to_dict())
-        
-        elif operation == OperationType.WRITE:
-            self.logger.info(f"Writing submodel with metadata: {submodel_metadata.to_dict()}")
-            self.adapter.write_json(submodel_metadata.to_dict(), payload)
-            self.logger.info("Submodel uploaded successfully.")
-            return None
-        
-        elif operation == OperationType.DELETE:
-            if not self.adapter.exists(submodel_metadata.to_dict()):
-                self.logger.error(f"Submodel file not found: {submodel_metadata}")
-                raise NotFoundError(f"Submodel file not found: {submodel_metadata}")
-            self.adapter.delete(submodel_metadata.to_dict())
-            self.logger.info("Submodel deleted successfully.")
-            return None
+
+        handlers = {
+            OperationType.READ: self._read_submodel,
+            OperationType.WRITE: self._write_submodel,
+            OperationType.DELETE: self._delete_submodel,
+        }
+        return handlers[operation](submodel_metadata, payload)
+
+    def _read_submodel(self, submodel_metadata: SubmodelMetadata, _payload: Dict[str, Any] | None) -> Dict[str, Any]:
+        if not self.adapter.exists(submodel_metadata.to_dict()):
+            self.logger.error(f"Submodel file not found: {submodel_metadata}")
+            raise NotFoundError(f"Submodel file not found: {submodel_metadata}")
+        return self.adapter.read(submodel_metadata.to_dict())
+
+    def _write_submodel(self, submodel_metadata: SubmodelMetadata, payload: Dict[str, Any] | None) -> None:
+        self.logger.info(f"Writing submodel with metadata: {submodel_metadata.to_dict()}")
+        self.adapter.write_json(submodel_metadata.to_dict(), payload)
+        self.logger.info("Submodel uploaded successfully.")
+        return None
+
+    def _delete_submodel(self, submodel_metadata: SubmodelMetadata, _payload: Dict[str, Any] | None) -> None:
+        if not self.adapter.exists(submodel_metadata.to_dict()):
+            self.logger.error(f"Submodel file not found: {submodel_metadata}")
+            raise NotFoundError(f"Submodel file not found: {submodel_metadata}")
+        self.adapter.delete(submodel_metadata.to_dict())
+        self.logger.info("Submodel deleted successfully.")
+        return None
 
     def upload_twin_aspect_document(
         self,

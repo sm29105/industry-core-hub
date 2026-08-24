@@ -1,14 +1,63 @@
 from typing import Dict, Any
-from managers.config.log_manager import LoggingManager
+from managers.config.config_manager import ConfigManager
+from tractusx_sdk.industry.adapters.submodel_adapter_factory import SubmodelAdapterFactory
+
+
+class SubmodelAdapterProvider:
+    """Create the configured submodel adapter without exposing YAML details to services."""
+
+    @staticmethod
+    def create_adapter(
+        dispatcher_path: str = "provider.submodel_dispatcher",
+        adapter_type: str | None = None,
+        adapter_config: Dict[str, Any] | None = None,
+    ) -> Any:
+        """
+        Build an adapter regardless of where its configuration originates.
+
+        If both ``adapter_type`` and ``adapter_config`` are omitted, the configuration
+        is loaded from the YAML dispatcher section at ``dispatcher_path``. Otherwise,
+        both must be supplied together (e.g. from a frontend request or a database
+        row) and are used as-is, bypassing YAML entirely. Either way the caller does
+        not need to know which source was used.
+        """
+        if adapter_type is None and adapter_config is None:
+            adapter_type, adapter_config = ConfigManager.get_adapter_mode_and_config(
+                dispatcher_path=dispatcher_path,
+                validate_adapter_exists=True,
+            )
+        elif adapter_type is None or adapter_config is None:
+            raise ValueError(
+                "Both adapter_type and adapter_config are required when "
+                "bypassing YAML configuration"
+            )
+
+        if not isinstance(adapter_type, str) or not adapter_type.strip():
+            raise ValueError("Adapter type must be a non-empty string")
+        if not isinstance(adapter_config, dict):
+            raise ValueError("Adapter configuration must be a dictionary")
+
+        normalized_type = adapter_type.strip().lower().replace(" ", "_").replace("-", "_")
+        available_adapters = SubmodelAdapterFactory.get_available_adapter_types()
+        if normalized_type not in available_adapters:
+            raise ValueError(
+                f"Adapter type '{adapter_type}' is not registered. "
+                f"Available adapters: {', '.join(sorted(available_adapters))}"
+            )
+
+        config = AdapterConfigurationInterface.transform_config(
+            normalized_type,
+            adapter_config,
+        )
+        return SubmodelAdapterFactory.from_config(normalized_type, config)
 
 
 class AdapterConfigurationInterface:
     """
-    Interface for SubmodelAdapterFactory configuration transformations.
+    Generic boundary between YAML configuration and adapter builder methods.
 
-    Provides static methods that wrap SubmodelAdapterFactory's transformation
-    capabilities, allowing clean delegation of adapter-specific config transformations.
-    This interface abstracts the transformation logic away from SubmodelServiceManager.
+    The selected adapter configuration is passed through without adapter-specific
+    mappings. Adapter configuration keys must therefore match the builder API.
 
     The interface methods follow the pattern:
         raw_config (from YAML) → transform_config() → transformed_config (for adapter)
@@ -21,7 +70,9 @@ class AdapterConfigurationInterface:
         """
         Transform adapter configuration from YAML format to factory-expected format.
 
-        Delegates to adapter-type-specific transformation methods via SubmodelAdapterFactory interface.
+        Retrieves all keys from the selected adapter configuration and passes them
+        through to SubmodelAdapterFactory.from_config(). This keeps the backend
+        independent of built-in and externally registered adapter schemas.
 
         Args:
             adapter_type: Normalized adapter type (lowercase with underscores)
@@ -38,75 +89,7 @@ class AdapterConfigurationInterface:
                 f"Configuration must be a dictionary, got {type(raw_config).__name__}"
             )
 
-        # Create a copy to avoid modifying the original
-        config = raw_config.copy()
+        if not isinstance(adapter_type, str) or not adapter_type.strip():
+            raise ValueError("Adapter type must be a non-empty string")
 
-        if adapter_type == "file_system":
-            return AdapterConfigurationInterface.transform_file_system_config(config)
-        elif adapter_type == "http_submodel":
-            return AdapterConfigurationInterface.transform_http_submodel_config(config)
-        elif adapter_type == "s3":
-            return AdapterConfigurationInterface.transform_s3_config(config)
-
-        return config
-
-    @staticmethod
-    def transform_file_system_config(config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Transform FileSystem adapter configuration via SubmodelAdapterFactory interface.
-
-        Converts YAML-formatted config to factory-expected format:
-            path: "..." → root_path: "..."
-        """
-        if "path" in config:
-            config["root_path"] = config.pop("path")
-            LoggingManager.get_logger(__name__).debug(
-                "Transformed 'path' field to 'root_path' for FileSystem adapter"
-            )
-        return config
-
-    @staticmethod
-    def transform_http_submodel_config(config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Transform HTTP Submodel adapter configuration via SubmodelAdapterFactory interface.
-
-        Flattens nested auth structure to factory-expected format:
-            auth:
-              token: "..." → auth_token: "..."
-              key_name: "..." → auth_key_name: "..."
-        """
-        if "auth" in config:
-            auth_config = config.pop("auth")
-            if isinstance(auth_config, dict):
-                if "token" in auth_config:
-                    config["auth_token"] = auth_config["token"]
-                if "key_name" in auth_config:
-                    config["auth_key_name"] = auth_config["key_name"]
-                LoggingManager.get_logger(__name__).debug(
-                    "Flattened 'auth' structure to 'auth_token' and 'auth_key_name' for HTTP Submodel adapter"
-                )
-        return config
-
-    @staticmethod
-    def transform_s3_config(config: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Transform S3 adapter configuration via SubmodelAdapterFactory interface.
-
-        Flattens nested auth structure to factory-expected format:
-            auth:
-              aws_access_key_id: "..." → aws_access_key_id: "..."
-              aws_secret_access_key: "..." → aws_secret_access_key: "..."
-        """
-        if "auth" in config:
-            auth_config = config.pop("auth")
-            if isinstance(auth_config, dict):
-                if "aws_access_key_id" in auth_config:
-                    config["aws_access_key_id"] = auth_config["aws_access_key_id"]
-                if "aws_secret_access_key" in auth_config:
-                    config["aws_secret_access_key"] = auth_config[
-                        "aws_secret_access_key"
-                    ]
-                LoggingManager.get_logger(__name__).debug(
-                    "Flattened 'auth' structure to 'aws_access_key_id' and 'aws_secret_access_key' for S3 adapter"
-                )
-        return config
+        return {key: value for key, value in raw_config.items()}
