@@ -29,6 +29,7 @@ from hashlib import sha256
 from enum import Enum
 
 from managers.config.log_manager import LoggingManager
+from managers.config.config_manager import ConfigManager
 from tools.exceptions import InvalidError, NotFoundError
 
 from tractusx_sdk.industry.adapters.submodel_adapter_factory import SubmodelAdapterFactory
@@ -97,7 +98,8 @@ class SubmodelServiceManager:
 
     # Adapter instances are cached per resolved source so repeated instantiations
     # (e.g. one per request) reuse the same adapter instead of rebuilding it.
-    _adapter_cache: Dict[str, Any] = {}
+    # Cache structure: {cache_key: {"adapter": adapter_instance, "mode": adapter_type_string}}
+    _adapter_cache: Dict[str, Dict[str, Any]] = {}
 
     def __init__(
         self,
@@ -139,7 +141,9 @@ class SubmodelServiceManager:
             manager3 = SubmodelServiceManager("provider.secondary_dispatcher")
         """
         try:
-            self.adapter = self._resolve_adapter(dispatcher_path, adapter_type, adapter_config)
+            adapter, adapter_mode = self._resolve_adapter(dispatcher_path, adapter_type, adapter_config)
+            self.adapter = adapter
+            self.adapter_mode = adapter_mode
         except ValueError as e:
             self.logger.error(f"Configuration error during initialization: {e}")
             raise
@@ -152,23 +156,36 @@ class SubmodelServiceManager:
         dispatcher_path: str,
         adapter_type: str | None,
         adapter_config: Dict[str, Any] | None,
-    ) -> Any:
-        """Resolve an adapter for the given source, reusing a cached instance if available."""
+    ) -> tuple[Any, str]:
+        """
+        Resolve an adapter for the given source, reusing a cached instance if available.
+        
+        Returns:
+            Tuple of (adapter_instance, adapter_mode_string)
+        """
         if adapter_type is not None or adapter_config is not None:
             if adapter_type is None or adapter_config is None:
                 raise ValueError(
                     "Both adapter_type and adapter_config are required for "
                     "frontend-configured adapters"
                 )
-            cache_key = self._build_cache_key(adapter_type, adapter_config)
-            source = f"frontend adapter '{adapter_type}'"
+            # Normalize so adapter_mode is consistent regardless of config source (YAML vs frontend/db).
+            resolved_mode = adapter_type.strip().lower().replace(" ", "_").replace("-", "_")
+            cache_key = self._build_cache_key(resolved_mode, adapter_config)
+            source = f"frontend adapter '{resolved_mode}'"
         else:
             cache_key = f"dispatcher:{dispatcher_path}"
             source = f"dispatcher '{dispatcher_path}'"
+            # Get the adapter mode from config
+            resolved_mode, _ = ConfigManager.get_adapter_mode_and_config(
+                dispatcher_path=dispatcher_path,
+                validate_adapter_exists=True,
+            )
 
         if cache_key in self._adapter_cache:
             self.logger.info(f"Reusing cached adapter for {source}")
-            return self._adapter_cache[cache_key]
+            cached_data = self._adapter_cache[cache_key]
+            return cached_data["adapter"], cached_data["mode"]
 
         # Provider resolves the source internally; manager stays source-agnostic.
         adapter = SubmodelAdapterProvider.create_adapter(
@@ -176,9 +193,9 @@ class SubmodelServiceManager:
             adapter_type=adapter_type,
             adapter_config=adapter_config,
         )
-        self._adapter_cache[cache_key] = adapter
+        self._adapter_cache[cache_key] = {"adapter": adapter, "mode": resolved_mode}
         self.logger.info(f"SubmodelServiceManager initialized from {source}")
-        return adapter
+        return adapter, resolved_mode
 
     @staticmethod
     def _build_cache_key(adapter_type: str, adapter_config: Dict[str, Any]) -> str:
@@ -187,7 +204,8 @@ class SubmodelServiceManager:
             config_signature = json.dumps(adapter_config, sort_keys=True, default=str)
         except TypeError:
             config_signature = repr(sorted(adapter_config.items(), key=str))
-        return f"frontend:{adapter_type}:{config_signature}"
+        config_hash = sha256(config_signature.encode("utf-8")).hexdigest()
+        return f"frontend:{adapter_type}:{config_hash}"
 
     @classmethod
     def clear_adapter_cache(cls) -> None:
@@ -225,7 +243,7 @@ class SubmodelServiceManager:
                 Default: False (raises ValueError if already registered).
 
         Raises:
-            ValueError: If neither builder_factory nor adapter_class is provided,
+            ValueError: If exactly one of builder_factory or adapter_class is not provided,
                 or if type already exists and overwrite=False.
             TypeError: If builder_factory is not callable or adapter_class
                 lacks a callable ``builder()`` method.
@@ -243,11 +261,11 @@ class SubmodelServiceManager:
                     adapter_class=MyCustomAdapter,
                 )
         """
-        # Validate that at least one parameter is provided
-        if builder_factory is None and adapter_class is None:
+        # Validate mutual exclusivity: exactly one registration path must be chosen.
+        if (builder_factory is None) == (adapter_class is None):
             raise ValueError(
-                "Either 'builder_factory' or 'adapter_class' must be provided. "
-                "Both cannot be None."
+                "Exactly one of 'builder_factory' or 'adapter_class' must be provided. "
+                "They are mutually exclusive."
             )
 
         # Validate builder_factory if provided
@@ -329,6 +347,20 @@ class SubmodelServiceManager:
 
                 SubmodelServiceManager.unregister_external_adapter("my_custom")
         """
+        # Check if adapter is a built-in adapter
+        built_in_adapters = {"file_system", "http_submodel", "s3"}
+        if adapter_type in built_in_adapters:
+            error_msg = f"Cannot unregister built-in adapter '{adapter_type}'. Built-in adapters are: {', '.join(sorted(built_in_adapters))}"
+            cls.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Check if adapter is currently registered
+        registered_adapters = cls.get_registered_adapters()
+        if adapter_type not in registered_adapters:
+            error_msg = f"Adapter '{adapter_type}' is not registered. Registered adapters are: {', '.join(sorted(registered_adapters)) if registered_adapters else 'none'}"
+            cls.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         try:
             SubmodelAdapterFactory.unregister_adapter(adapter_type=adapter_type)
             cls.logger.info(
