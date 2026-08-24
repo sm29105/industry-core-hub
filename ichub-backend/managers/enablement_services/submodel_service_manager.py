@@ -74,25 +74,64 @@ class SubmodelServiceManager:
     """
     Manager for handling submodel service operations (read, write, delete).
     
-    Creates one adapter per manager instance from the configured dispatcher section.
-    Adapter initialization is dynamic and delegated to SubmodelAdapterFactory.
-    Supports multiple storage backends:
-    - FileSystem (local storage)
-    - S3 (AWS S3 or S3-compatible)
-    - HttpSubmodel (external submodel service)
+    Orchestrates storage backend operations via a dynamically-selected adapter,
+    implementing clean separation of concerns between YAML configuration, adapter
+    selection, and storage operations. Adapter initialization is dynamic and delegated
+    to SubmodelAdapterFactory via SubmodelAdapterProvider.
     
-    Configuration is loaded from YAML and passed to the factory without any hardcoded logic
-    or switch statements. Adapter type and configuration are determined dynamically from
-    the configuration section: provider.submodel_dispatcher
+    Supported Storage Backends:
+    - FileSystem: Local directory-based storage
+    - S3: AWS S3 or S3-compatible object storage
+    - HttpSubmodel: External submodel service via HTTP/REST API
     
-    Example:
-        # Initialize adapter from configuration
+    Architecture (Four-Layer):
+        YAML File (configuration.yml) → ConfigManager → SubmodelServiceManager
+        → SubmodelAdapterProvider → SubmodelAdapterFactory → Adapter Instance
+    
+    Features:
+    - Configuration-driven adapter selection (zero hardcoded logic)
+    - Per-source adapter caching to avoid repeated instantiation
+    - Support for runtime registration of custom (external) adapter types
+    - Configurable from YAML, frontend payloads, or database rows
+    - Full logging and error handling
+    - UUID validation and semantic ID hashing for storage organization
+    
+    Configuration Structure (YAML):
+        provider:
+          submodel_dispatcher:
+            mode: "file_system"  # or "s3", "http_submodel"
+            file_system:
+              root_path: "..."
+              path_pattern: "..."
+            s3:
+              bucket_name: "..."
+              aws_access_key_id: "..."
+            http_submodel:
+              base_url: "..."
+              auth_token: "..."
+    
+    Adapter Caching:
+        Adapter instances are cached per configuration source:
+        - YAML-based: cached by dispatcher_path (e.g., "provider.submodel_dispatcher")
+        - Frontend/DB-based: cached by adapter_type + config hash
+        Repeated manager instantiations with the same source reuse cached adapters.
+    
+    Usage Examples:
+        # Load from YAML configuration (default)
         manager = SubmodelServiceManager()
+        manager.upload_twin_aspect_document(submodel_id, semantic_id, payload)
         
-        # A manager built from the same dispatcher section reuses the cached adapter.
+        # Reuses cached adapter from same dispatcher section
         manager2 = SubmodelServiceManager()
-        # A manager pointed at a different dispatcher section builds/caches its own adapter.
+        
+        # Different dispatcher section builds/caches separate adapter
         manager3 = SubmodelServiceManager("provider.secondary_dispatcher")
+        
+        # Load from frontend payload (e.g., REST API request)
+        manager4 = SubmodelServiceManager(
+            adapter_type="s3",
+            adapter_config={"bucket_name": "my-bucket", "region": "us-east-1"}
+        )
     """
     logger = LoggingManager.get_logger(__name__)
 
@@ -158,10 +197,33 @@ class SubmodelServiceManager:
         adapter_config: Dict[str, Any] | None,
     ) -> tuple[Any, str]:
         """
-        Resolve an adapter for the given source, reusing a cached instance if available.
+        Resolve and cache an adapter based on configuration source.
+        
+        This internal method handles two configuration sources:
+        1. YAML-based: Load from dispatcher_path via ConfigManager
+        2. Frontend/DB-based: Use provided adapter_type and adapter_config directly
+        
+        Adapter caching is per-source:
+        - YAML: cached by dispatcher_path
+        - Frontend/DB: cached by adapter_type + config signature hash
+        
+        Args:
+            dispatcher_path: YAML path to dispatcher config (e.g., "provider.submodel_dispatcher")
+                Used only if adapter_type and adapter_config are None (YAML mode).
+            adapter_type: Adapter type (e.g., "file_system", "s3", "http_submodel").
+                If provided, adapter_config must also be provided (frontend mode).
+            adapter_config: Raw adapter configuration dictionary (frontend mode).
+                If provided, adapter_type must also be provided.
         
         Returns:
-            Tuple of (adapter_instance, adapter_mode_string)
+            Tuple of (adapter_instance, normalized_adapter_mode_string)
+        
+        Raises:
+            ValueError: If configuration is invalid or incomplete.
+        
+        Cache Behavior:
+            - Subsequent calls with the same source reuse the cached adapter
+            - Clearing cache forces rebuild on next instantiation
         """
         if adapter_type is not None or adapter_config is not None:
             if adapter_type is None or adapter_config is None:
@@ -199,7 +261,25 @@ class SubmodelServiceManager:
 
     @staticmethod
     def _build_cache_key(adapter_type: str, adapter_config: Dict[str, Any]) -> str:
-        """Build a stable cache key for a frontend-supplied adapter configuration."""
+        """
+        Build a stable, deterministic cache key for frontend-supplied adapter configuration.
+        
+        Uses SHA-256 hash of the sorted config dictionary to ensure consistent cache keys
+        even if dictionary keys appear in different orders. Handles non-JSON-serializable
+        values by falling back to repr() of sorted items.
+        
+        Args:
+            adapter_type: Adapter type (e.g., "s3", "http_submodel").
+            adapter_config: Configuration dictionary for the adapter.
+        
+        Returns:
+            Cache key in format: "frontend:{adapter_type}:{config_hash}"
+        
+        Example:
+            config = {"bucket": "my-bucket", "region": "us-east-1"}
+            key = SubmodelServiceManager._build_cache_key("s3", config)
+            # Returns: "frontend:s3:a1b2c3d4e5f6..."
+        """
         try:
             config_signature = json.dumps(adapter_config, sort_keys=True, default=str)
         except TypeError:
@@ -212,8 +292,17 @@ class SubmodelServiceManager:
         """
         Clear all cached adapter instances.
         
-        Use after reloading configuration or between test cases so the next
-        manager instantiation rebuilds adapters from the current configuration.
+        Removes all cached adapters regardless of source (YAML or frontend).
+        The next manager instantiation will rebuild adapters from the current
+        configuration instead of reusing cached instances.
+        
+        Use cases:
+        - After reloading application configuration
+        - Between test cases to ensure test isolation
+        - To force adapter recreation without restarting the application
+        
+        Logging:
+            Logs info message when cache is cleared.
         """
         cls._adapter_cache.clear()
         cls.logger.info("Submodel adapter cache cleared")
@@ -372,16 +461,25 @@ class SubmodelServiceManager:
             raise
 
     def _validate_uuid(self, value: Any) -> UUID:
-        """Validate and convert value to UUID.
+        """
+        Validate and convert a value to a UUID instance.
+        
+        Accepts UUID instances or strings and returns a validated UUID object.
+        Useful for coercing input from frontend payloads or database rows to UUIDs.
         
         Args:
-            value: Value to validate as UUID.
+            value: Value to validate as UUID. Can be a UUID instance or string representation.
         
         Returns:
             Valid UUID instance.
         
         Raises:
-            InvalidError: If value cannot be converted to UUID.
+            InvalidError: If value cannot be converted to a valid UUID.
+        
+        Example:
+            uuid_str = "550e8400-e29b-41d4-a716-446655440000"
+            validated = manager._validate_uuid(uuid_str)
+            # Returns: UUID('550e8400-e29b-41d4-a716-446655440000')
         """
         if isinstance(value, UUID):
             return value
@@ -412,23 +510,39 @@ class SubmodelServiceManager:
         semantic_id: str,
         payload: Dict[str, Any] | None = None
     ) -> Dict[str, Any] | None:
-        """Execute a submodel operation (read, write, delete) in a generalized manner.
+        """
+        Execute a submodel operation (read, write, delete) via the configured adapter.
         
-        This method handles the branching logic between HTTP and filesystem adapters,
-        reducing code duplication across read/write/delete operations.
+        This is the unified entry point for all submodel operations. It:
+        1. Validates the submodel_id (converts to UUID if needed)
+        2. Hashes the semantic_id for storage organization
+        3. Creates SubmodelMetadata object for adapter communication
+        4. Dispatches to operation-specific handler (read/write/delete)
+        5. Logs all operations
+        
+        Operation Handlers:
+        - READ: Checks existence, returns submodel content
+        - WRITE: Stores submodel content to backend
+        - DELETE: Checks existence, removes submodel
         
         Args:
-            operation: Type of operation to perform.
-            submodel_id: UUID of the submodel.
-            semantic_id: Semantic ID of the submodel.
-            payload: Payload data for write operations.
+            operation: Type of operation to perform (OperationType enum).
+            submodel_id: UUID of the submodel. Can be UUID instance or string representation.
+            semantic_id: Semantic ID of the submodel (e.g., "urn:samm:io.catenax...").
+            payload: Payload data for write operations. Ignored for read/delete.
         
         Returns:
-            Operation result (content for read operations, None for write/delete).
+            - READ: Dictionary containing submodel content
+            - WRITE: None
+            - DELETE: None
         
         Raises:
-            InvalidError: If submodel_id is invalid.
-            NotFoundError: If submodel not found during read/delete.
+            InvalidError: If submodel_id is not a valid UUID.
+            NotFoundError: If submodel does not exist (read/delete operations).
+            RuntimeError: If adapter is not initialized or operation fails.
+        
+        Logging:
+            All operations are logged at info level with operation type, IDs, and results.
         """
         submodel_id = self._validate_uuid(submodel_id)
         
@@ -480,20 +594,27 @@ class SubmodelServiceManager:
         
         Uploads a JSON-serializable submodel document to the underlying storage
         system (FileSystem, S3, or external HTTP submodel service) based on the
-        configured adapter.
+        configured adapter. The submodel is indexed by semantic ID hash and submodel ID.
+        
+        Storage Path Organization:
+            - FileSystem: Uses semantic_id hash and submodel_id for directory structure
+            - S3: Object key derived from semantic_id hash and submodel_id
+            - HttpSubmodel: Delegated to external service via HTTP POST
         
         Args:
-            submodel_id: UUID of the submodel being uploaded.
-            semantic_id: Semantic ID (e.g., urn:example:submodel) that identifies
-                the submodel type. Used for storage path organization.
+            submodel_id: UUID of the submodel being uploaded. Can be UUID instance or string.
+            semantic_id: Semantic ID of the submodel type (e.g., "urn:samm:io.catenax...").
+                Used for organizing storage paths by semantic type.
             payload: Submodel content as a dictionary. Must be JSON-serializable.
+                Typically follows AAS structure (modelType, identification, submodelElements, etc.).
         
         Returns:
             None
         
         Raises:
             InvalidError: If submodel_id is not a valid UUID.
-            RuntimeError: If adapter is not initialized or storage operation fails.
+            RuntimeError: If adapter is not initialized, payload is not JSON-serializable,
+                or storage operation fails.
         
         Example:
             payload = {
@@ -524,15 +645,26 @@ class SubmodelServiceManager:
         
         Fetches a previously uploaded submodel document from the underlying storage
         system (FileSystem, S3, or external HTTP submodel service) by its UUID and
-        semantic ID.
+        semantic ID. Raises NotFoundError if the submodel does not exist.
+        
+        Return Format:
+            Returns the complete submodel as a dictionary. Content format depends on
+            the storage adapter:
+            - FileSystem: Reads from JSON file
+            - S3: Deserializes from S3 object
+            - HttpSubmodel: Fetches from external service via HTTP GET
         
         Args:
-            submodel_id: UUID of the submodel to retrieve.
-            semantic_id: Semantic ID used to locate the submodel in storage.
+            submodel_id: UUID of the submodel to retrieve. Can be UUID instance or string.
+            semantic_id: Semantic ID of the submodel type (e.g., "urn:samm:io.catenax...").
+                Used to locate the submodel in storage.
         
         Returns:
-            Submodel content as a dictionary with full AAS structure
-            (modelType, identification, submodelElements, etc.).
+            Submodel content as a dictionary with full AAS structure:
+                - modelType: "Submodel"
+                - identification: "..."
+                - submodelElements: [...]  (array of elements)
+                - and other AAS-defined properties
         
         Raises:
             InvalidError: If submodel_id is not a valid UUID.
@@ -561,12 +693,18 @@ class SubmodelServiceManager:
         Delete a submodel from the configured storage backend.
         
         Removes a submodel document from the underlying storage system (FileSystem,
-        S3, or external HTTP submodel service). The submodel must exist; attempting
-        to delete a non-existent submodel raises NotFoundError.
+        S3, or external HTTP submodel service). The submodel must exist before deletion;
+        attempting to delete a non-existent submodel raises NotFoundError.
+        
+        Storage Backend Behavior:
+            - FileSystem: Deletes the JSON file from disk
+            - S3: Deletes the object from the S3 bucket
+            - HttpSubmodel: Sends HTTP DELETE request to external service
         
         Args:
-            submodel_id: UUID of the submodel to delete.
-            semantic_id: Semantic ID used to locate the submodel in storage.
+            submodel_id: UUID of the submodel to delete. Can be UUID instance or string.
+            semantic_id: Semantic ID of the submodel type (e.g., "urn:samm:io.catenax...").
+                Used to locate the submodel in storage.
         
         Returns:
             None
