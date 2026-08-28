@@ -1,0 +1,35 @@
+#################################################################################
+# Eclipse Tractus-X - Industry Core Hub Backend
+# Test Configuration (S3-compatible)
+#
+# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#################################################################################
+
+# Test configuration for validating dynamic configuration loading with unittests
+
+provider:
+  # -- Submodel Dispatcher configuration (S3-compatible)
+  submodel_dispatcher:
+    # -- Storage mode: "s3"
+    mode: "s3"
+    
+    # -- S3 configuration
+    s3:
+      # -- S3 bucket name (will be created automatically by moto during tests)
+      bucket_name: "ichub-submodels"
+      # -- AWS region (can be any value; "us-east-1" is default)
+      region_name: "us-east-1"
+      # -- Key pattern for submodel storage (use {semantic_id} and {submodel_id} as placeholders)
+      key_pattern: "{semantic_id}/{submodel_id}.json"
+      # -- Custom endpoint URL S3 gateway (running locally during tests)
+      endpoint_url: "http://localhost:8333"
+      # -- Authentication configuration
+      auth:
+        # -- Enable authentication
+        enabled: false
+        # -- AWS access key ID (use empty without authentication)
+        aws_access_key_id: ""
+        # -- AWS secret access key (use empty without authentication)
+        aws_secret_access_key: ""
+      # -- Request timeout in seconds
