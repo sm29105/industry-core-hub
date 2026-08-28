@@ -23,12 +23,20 @@
 
 import pytest
 import sys
+from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
 
 def pytest_configure(config):
-    """Configure pytest before test collection - mock database before imports."""
-    # Mock the database engine and connection before importing any test modules
+    """Configure pytest before test collection - only mock database, NOT SDK by default.
+    
+    This allows integration tests to use real SDK while unit tests can opt-in to mocking.
+    """
+    
+    # ONLY mock the database engine (always safe to mock)
+    # Do NOT mock tractusx_sdk - let it be imported normally
+    
+    # Mock the database engine and connection
     mock_engine = MagicMock()
     mock_connection = MagicMock()
     mock_engine.connect.return_value.__enter__.return_value = mock_connection
@@ -39,18 +47,4 @@ def pytest_configure(config):
     sys.modules['database'].engine = mock_engine
     sys.modules['database'].get_session = MagicMock(return_value=MagicMock())
 
-    # Mock SubmodelServiceManager so that module-level instantiation in routers
-    # (notification_management_service = NotificationsManagementService()) does not
-    # attempt to create filesystem directories or connect to external storage.
-    # Individual tests that need specific behaviour override this via their own patches.
-    mock_submodel_module = MagicMock()
-    sys.modules['managers.enablement_services.submodel_service_manager'] = mock_submodel_module
-
-
-@pytest.fixture(scope="session", autouse=True)
-def mock_connector_globally():
-    """Mock connector manager globally to avoid connection initialization."""
-    with patch('connector.connector_manager') as mock_connector:
-        mock_connector.consumer.connector_service = Mock()
-        yield mock_connector
 

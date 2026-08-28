@@ -1,0 +1,19 @@
+#################################################################################
+# HTTP Submodel Adapter Test Configuration
+# Used for unit tests of HTTP Submodel-based adapter
+#################################################################################
+
+provider:
+  submodel_dispatcher:
+    mode: http_submodel
+    http_submodel:
+      base_url: https://external-ichub.example.com
+      api_path: /api/v1
+      url_pattern: "{base_url}{api_path}/{semantic_id}/{submodel_id}/submodel"
+      timeout: 30
+      verify_ssl: true
+      auth:
+        enabled: true
+        token: test-token
+        key_name: X-Api-Key
+        type: api_key

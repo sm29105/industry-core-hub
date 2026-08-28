@@ -1,0 +1,33 @@
+#################################################################################
+# Eclipse Tractus-X - Industry Core Hub Backend
+# Test Configuration for SeaweedFS S3 Integration Tests
+#
+# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# SPDX-License-Identifier: Apache-2.0
+#################################################################################
+
+# Test configuration for S3 adapter with SeaweedFS (weed-mini)
+# This file is loaded by pytest fixtures for integration testing
+
+provider:
+  submodel_dispatcher:
+    # Use S3 adapter for SeaweedFS testing
+    mode: "s3"
+    
+    # S3 adapter configuration - uses SeaweedFS S3 endpoint
+    s3:
+      # SeaweedFS bucket for submodels
+      bucket_name: "submodels-tests"
+      
+      # AWS region (not used by SeaweedFS but required by boto3)
+      region_name: "us-east-1"
+      
+      # SeaweedFS S3 endpoint - adjust port if different
+      endpoint_url: "http://localhost:8333"
+      
+      # Key pattern for organizing submodels in S3
+      key_pattern: "{semantic_id}/{submodel_id}.json"
+      
+      # Authentication configuration
+      aws_access_key_id: "admin"
+      aws_secret_access_key: "secret"

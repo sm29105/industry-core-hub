@@ -1,0 +1,17 @@
+#################################################################################
+# S3 Adapter Test Configuration
+# Used for unit tests of S3-based submodel adapter
+#################################################################################
+
+provider:
+  submodel_dispatcher:
+    mode: s3
+    s3:
+      bucket_name: submodels-tests
+      region_name: us-east-1
+      endpoint_url: http://localhost:8333
+      key_pattern: "{semantic_id}/{submodel_id}.json"
+      auth:
+        enabled: true
+        aws_access_key_id: test-access-key
+        aws_secret_access_key: test-secret-key

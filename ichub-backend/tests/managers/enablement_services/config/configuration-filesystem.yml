@@ -1,0 +1,11 @@
+#################################################################################
+# FileSystem Adapter Test Configuration
+# Used for unit tests of FileSystem-based submodel adapter
+#################################################################################
+
+provider:
+  submodel_dispatcher:
+    mode: file_system
+    file_system:
+      path: /tmp/ichub/data/submodels
+      path_pattern: "{base_path}/{semantic_id}/{submodel_id}.json"
