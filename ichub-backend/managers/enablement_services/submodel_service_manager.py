@@ -422,26 +422,24 @@ class SubmodelServiceManager:
         """
         Unregister a previously registered external adapter type.
 
-        Removes a custom adapter from the runtime registry. Built-in adapters
-        cannot be unregistered.
-
         Args:
             adapter_type: External adapter type key to unregister.
 
         Raises:
-            ValueError: If adapter_type is not registered or is a built-in adapter.
+            ValueError: If adapter_type is not registered.
 
         Example:
             Remove a custom adapter::
 
                 SubmodelServiceManager.unregister_external_adapter("my_custom")
         """
+        # TODO: Consider whether to allow unregistering built-in adapters in the future or not.
         # Check if adapter is a built-in adapter
-        built_in_adapters = {"file_system", "http_submodel", "s3"}
-        if adapter_type in built_in_adapters:
-            error_msg = f"Cannot unregister built-in adapter '{adapter_type}'. Built-in adapters are: {', '.join(sorted(built_in_adapters))}"
-            cls.logger.error(error_msg)
-            raise ValueError(error_msg)
+        # built_in_adapters = {"file_system", "http_submodel", "s3"}
+        # if adapter_type in built_in_adapters:
+        #     error_msg = f"Cannot unregister built-in adapter '{adapter_type}'. Built-in adapters are: {', '.join(sorted(built_in_adapters))}"
+        #     cls.logger.error(error_msg)
+        #     raise ValueError(error_msg)
 
         # Check if adapter is currently registered
         registered_adapters = cls.get_registered_adapters()
