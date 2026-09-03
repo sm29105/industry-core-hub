@@ -1,3 +1,4 @@
+#################################################################################
 # Eclipse Tractus-X - Industry Core Hub Backend
 #
 # Copyright (c) 2025 Contributors to the Eclipse Foundation
@@ -17,9 +18,6 @@
 # under the License.
 #
 # SPDX-License-Identifier: Apache-2.0
-#################################################################################
-# S3 Adapter Test Configuration
-# Used for unit tests of S3-based submodel adapter
 #################################################################################
 
 provider:
